@@ -142,6 +142,11 @@ SOURCES = {
         "single_category": "markets",
         "feeds": {"markets": "https://www.investing.com/rss/market_overview.rss"},
     },
+    "Christianity Today": {
+        "domain": "christianitytoday.com", "bias": "bias-C", "lean": {"christian": "Faith"},
+        "single_category": "christian",
+        "feeds": {"christian": "https://feeds.christianitytoday.com/christianitytoday/ctmag"},
+    },
 }
 
 BIAS_LABEL = {"bias-L": "Left", "bias-CL": "Lean Left", "bias-C": "Center", "bias-CR": "Lean Right", "bias-R": "Right"}
