@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#FFFFFF" id="themeColorMeta" />
+<title>Browse the Archive — 12F | Search Every Story We've Indexed</title>
+<meta name="description" content="Search and browse 12F's full news archive by section — politics, markets, world, tech, sports, culture and Christian World News — with real photos and source bias ratings." />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://12f.news/browse.html" />
+<link rel="icon" type="image/png" sizes="32x32" href="12f-favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="12f-favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="12f-favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="12f.css">
+</head>
+<body>
+
+  <div class="masthead-utility">
+    <div class="utility-left mono"><a href="index.html">← BACK TO 12F</a></div>
+    <div class="utility-right">
+      <button class="icon-btn" id="themeToggle" title="Switch to dark mode" aria-label="Switch to dark mode">
+        <svg id="themeToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="masthead-logo">
+    <a href="index.html"><img id="logoMasthead" src="12f-logo-light.png" alt="12F" /></a>
+  </div>
+
+  <div class="masthead-rule"></div>
+
+  <section class="browse-hero">
+    <h1 class="serif">Browse the Archive</h1>
+    <p class="browse-sub mono">Every article 12F has ever indexed — search it, or browse it by section.</p>
+    <input type="text" id="archiveSearchInput" class="archive-input browse-search" placeholder="Search every article we've ever published…" autocomplete="off">
+    <div class="chip-row" id="browseChipRow">
+      <div class="chip active" data-cat="all">All Sections</div>
+      <div class="chip" data-cat="politics">Politics</div>
+      <div class="chip" data-cat="markets">Markets</div>
+      <div class="chip" data-cat="christian">Christian World News</div>
+      <div class="chip" data-cat="world">World</div>
+      <div class="chip" data-cat="tech">Tech</div>
+      <div class="chip" data-cat="sports">Sports</div>
+      <div class="chip" data-cat="culture">Culture</div>
+    </div>
+  </section>
+
+  <section class="section-flat" style="padding-top:20px;">
+    <div class="flat-grid" id="archiveGrid"></div>
+    <p class="empty-note" id="archiveEmpty" hidden>No articles match your search.</p>
+    <div class="archive-panel-foot" style="justify-content:flex-start; padding:24px 0 0; border-top:none;">
+      <button class="archive-load-more" id="archiveLoadMore" type="button" hidden>Load 24 more</button>
+      <span class="archive-status mono" id="archiveStatus"></span>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot-inner">
+      <div class="foot-top">
+        <div class="foot-brand">
+          <img class="logo" id="logoFooter" src="12f-logo-light.png" alt="12F" />
+          <span class="foot-tagline mono">Caught Up in 90 Seconds</span>
+        </div>
+        <nav class="foot-links">
+          <a href="index.html">Home</a>
+          <a href="#">Our Sources</a>
+          <a href="#">Curation Policy</a>
+          <a href="#">Privacy</a>
+          <a href="#">Contact</a>
+        </nav>
+      </div>
+
+      <div class="foot-rule"></div>
+
+      <p class="foot-disclaimer">12F is an AI-assisted news aggregator. We do not host, republish, or edit article text — every headline links out to the original publisher. Photos on this page are pulled directly from each original publisher's own site and displayed with credit; we do not claim ownership of any photograph, and a story with no available image is shown as text only rather than a stock substitute. Summaries are AI-generated from public headlines and excerpts and may contain errors; always read the source before sharing. Placement across the political spectrum reflects our editorial curation policy, not a claim of neutrality by any single source.</p>
+
+      <div class="foot-bottom">
+        <span class="foot-copyright mono">&copy; 12F 2026</span>
+      </div>
+    </div>
+  </footer>
+
+<script>
+  // ---------- Light/dark theme toggle (mirrors index.html) ----------
+  (function(){
+    const root = document.documentElement;
+    const toggle = document.getElementById('themeToggle');
+    const icon = document.getElementById('themeToggleIcon');
+    const logoMasthead = document.getElementById('logoMasthead');
+    const logoFooter = document.getElementById('logoFooter');
+    const themeColorMeta = document.getElementById('themeColorMeta');
+    const MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+    const STORAGE_KEY = '12f-theme';
+    function readStoredTheme(){
+      try {
+        const v = window.localStorage.getItem(STORAGE_KEY);
+        return (v === 'dark' || v === 'light') ? v : null;
+      } catch (e) { return null; }
+    }
+    function writeStoredTheme(value){
+      try { window.localStorage.setItem(STORAGE_KEY, value); } catch (e) { /* storage unavailable — ignore */ }
+    }
+    let theme = readStoredTheme() || 'light';
+    function applyTheme(){
+      const dark = theme === 'dark';
+      root.dataset.theme = dark ? 'dark' : 'light';
+      logoMasthead.src = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      logoFooter.src = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      icon.innerHTML = dark ? SUN : MOON;
+      const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+      toggle.title = label;
+      toggle.setAttribute('aria-label', label);
+      themeColorMeta.setAttribute('content', dark ? '#0A0A0E' : '#FFFFFF');
+    }
+    toggle.addEventListener('click', function(){
+      theme = theme === 'light' ? 'dark' : 'light';
+      writeStoredTheme(theme);
+      applyTheme();
+    });
+    applyTheme();
+  })();
+
+  // ---------- Archive browse/search ----------
+  (function(){
+    const chips = document.querySelectorAll('#browseChipRow .chip');
+    const input = document.getElementById('archiveSearchInput');
+    const grid = document.getElementById('archiveGrid');
+    const emptyNote = document.getElementById('archiveEmpty');
+    const loadMoreBtn = document.getElementById('archiveLoadMore');
+    const statusEl = document.getElementById('archiveStatus');
+
+    const CAT_KICKER = {
+      politics: 'Politics', markets: 'Business', world: 'World', tech: 'Technology',
+      christian: 'Faith', sports: 'Sports', culture: 'Culture',
+    };
+    const BIAS_LABEL = {'bias-L':'Left','bias-CL':'Lean Left','bias-C':'Center','bias-CR':'Lean Right','bias-R':'Right'};
+    const PAGE = 24;
+
+    let archiveData = null;
+    let filtered = [];
+    let visibleCount = 0;
+    let activeCat = 'all';
+
+    function escHtml(s){
+      return (s || '').replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+
+    function fmtDate(ts){
+      if(!ts) return 'Recently';
+      const d = new Date(ts * 1000);
+      return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+        ' · ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+    }
+
+    function cardHtml(a){
+      const kicker = CAT_KICKER[a.category] || 'News';
+      const biasDot = a.bias ? '<span class="bias-dot-mini ' + escHtml(a.bias) + '" title="Source bias rating: ' + escHtml(BIAS_LABEL[a.bias] || '') + '"></span>' : '';
+      const byline = '<div class="byline"><span class="source-tag">' + escHtml(a.source) + '</span><span class="lean">' + escHtml(kicker) + '</span>' + biasDot + '</div>';
+      const meta = '<div class="meta"><span class="mono">' + escHtml(fmtDate(a.ts)) + '</span><a href="' + escHtml(a.url) + '" target="_blank" rel="noopener noreferrer">' + escHtml(a.domain || '') + ' ↗</a></div>';
+      const titleLink = '<a href="' + escHtml(a.url) + '" target="_blank" rel="noopener noreferrer" style="color:inherit;"><h3>' + escHtml(a.title) + '</h3></a>';
+      const summary = '<p>' + escHtml(a.summary || 'Read the full story at the source link below.') + '</p>';
+      if(a.image){
+        return '<div class="flat-item flat-item-photo">' +
+          '<div class="media"><img class="cover-photo" src="' + escHtml(a.image) + '" alt="' + escHtml(a.title) + '" referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'"><div class="photo-credit">Photo: via ' + escHtml(a.source) + '</div></div>' +
+          byline + titleLink + summary + meta +
+        '</div>';
+      }
+      return '<div class="flat-item">' + byline + titleLink + summary + meta + '</div>';
+    }
+
+    function renderGrid(){
+      const slice = filtered.slice(0, visibleCount);
+      grid.innerHTML = slice.map(cardHtml).join('');
+      loadMoreBtn.hidden = visibleCount >= filtered.length;
+      emptyNote.hidden = filtered.length > 0;
+      statusEl.textContent = filtered.length
+        ? (Math.min(visibleCount, filtered.length) + ' of ' + filtered.length + ' articles')
+        : '';
+    }
+
+    function applyFilters(){
+      const q = input.value.trim().toLowerCase();
+      filtered = (archiveData || []).filter(function(a){
+        if(activeCat !== 'all' && a.category !== activeCat) return false;
+        if(!q) return true;
+        return (a.title && a.title.toLowerCase().indexOf(q) !== -1) ||
+               (a.summary && a.summary.toLowerCase().indexOf(q) !== -1) ||
+               (a.source && a.source.toLowerCase().indexOf(q) !== -1);
+      });
+      visibleCount = Math.min(PAGE, filtered.length);
+      renderGrid();
+    }
+
+    function ensureData(){
+      statusEl.textContent = 'Loading archive…';
+      fetch('archive.json').then(function(r){ return r.json(); }).then(function(data){
+        archiveData = Array.isArray(data) ? data : [];
+        applyFilters();
+      }).catch(function(){
+        archiveData = [];
+        statusEl.textContent = "Couldn't load the archive right now — try again in a moment.";
+      });
+    }
+
+    chips.forEach(function(chip){
+      chip.addEventListener('click', function(){
+        chips.forEach(function(c){ c.classList.remove('active'); });
+        chip.classList.add('active');
+        activeCat = chip.dataset.cat;
+        if(archiveData) applyFilters();
+      });
+    });
+
+    input.addEventListener('input', function(){ if(archiveData) applyFilters(); });
+    loadMoreBtn.addEventListener('click', function(){
+      visibleCount = Math.min(visibleCount + PAGE, filtered.length);
+      renderGrid();
+    });
+
+    // Preselect a category from ?cat=... (set by the "Browse other stories"
+    // link on the homepage, which passes along whatever tab was active).
+    const params = new URLSearchParams(window.location.search);
+    const presetCat = params.get('cat');
+    if(presetCat){
+      const match = Array.from(chips).find(function(c){ return c.dataset.cat === presetCat; });
+      if(match){
+        chips.forEach(function(c){ c.classList.remove('active'); });
+        match.classList.add('active');
+        activeCat = presetCat;
+      }
+    }
+
+    ensureData();
+  })();
+</script>
+
+</body>
+</html>
