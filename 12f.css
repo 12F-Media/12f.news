@@ -242,6 +242,10 @@ a{color:inherit; text-decoration:none;}
   .front-page{grid-template-columns:1fr; row-gap:40px;}
   .rail-left, .lead-col{border-right:none; padding:0; border-bottom:1px solid var(--border); padding-bottom:32px;}
   .rail-right{padding:0;}
+  /* "Browse more" rail panels exist purely to fill leftover vertical space
+     next to the (much taller) desktop lead column. Once the layout stacks
+     to a single column there's no gap to fill, so hide them entirely. */
+  .rail-explore{display:none !important;}
 }
 
 /* compact AI briefing card, sits atop the left rail */
@@ -420,6 +424,16 @@ a{color:inherit; text-decoration:none;}
 
 .up{color:var(--up);} .down{color:var(--down);}
 
+/* dedicated per-category grid, hidden inside the lead column until that
+   category's nav chip is active (see the category-filtering script) --
+   single column since the lead column is much narrower than the full-width
+   below-fold sections that also use .flat-grid. */
+.lead-col .flat-grid.cat-grid{display:none; grid-template-columns:1fr;}
+
+/* homepage-only "browse more" rail panels (left: Sports & Culture, right:
+   Tech & World) -- reuse .digest-list styling, just a different kicker. */
+.rail-explore .digest-list li:first-child{padding-top:0;}
+
 /* ---------- Below-fold sections — dense flat lists, no cards ---------- */
 .section-flat{max-width:1320px; margin:0 auto; padding:52px clamp(16px,4vw,48px) 0;}
 .flat-grid{display:grid; grid-template-columns:1fr 1fr; column-gap:44px;}
@@ -448,16 +462,48 @@ a{color:inherit; text-decoration:none;}
 /* ---------- Footer ---------- */
 footer{
   margin-top:80px; border-top:1px solid var(--border);
-  padding:40px clamp(16px,4vw,48px) 60px;
+  background:var(--bg-elev);
+  padding:44px clamp(16px,4vw,48px) 30px;
   color:var(--text-faint); font-size:12.5px; line-height:1.7;
 }
-footer .foot-grid{max-width:1320px; margin:0 auto; display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap;}
-footer .disclaimer{max-width:520px;}
-footer .foot-links{display:flex; gap:20px; flex-wrap:wrap;}
-footer .foot-links a{color:var(--text-dim);}
-footer .foot-links a:hover{color:var(--text);}
-footer .brand{font-size:14px; margin-bottom:12px; color:var(--text-dim); display:flex; align-items:center;}
-footer .brand img.logo{height:51px; width:auto; display:block;}
+footer .foot-inner{max-width:1320px; margin:0 auto;}
+
+footer .foot-top{
+  display:flex; align-items:center; justify-content:space-between; gap:20px 28px;
+  flex-wrap:wrap; margin-bottom:28px;
+}
+footer .foot-brand{display:flex; align-items:center; gap:14px;}
+footer .foot-brand img.logo{height:38px; width:auto; display:block;}
+footer .foot-tagline{
+  font-size:10.5px; font-weight:600; color:var(--text-dim); text-transform:uppercase;
+  letter-spacing:.1em; padding-left:14px; border-left:1px solid var(--border-strong);
+}
+footer .foot-links{display:flex; gap:22px; flex-wrap:wrap;}
+footer .foot-links a{color:var(--text-dim); font-weight:500; font-size:12.5px;}
+footer .foot-links a:hover{color:var(--accent);}
+
+footer .foot-rule{height:1px; background:var(--border); margin:0 0 26px;}
+
+footer .foot-disclaimer{max-width:860px; margin:0 0 28px; font-size:11.5px; color:var(--text-faint); line-height:1.7;}
+
+footer .foot-bottom{
+  display:flex; align-items:center; justify-content:space-between; gap:10px 20px; flex-wrap:wrap;
+  padding-top:18px; border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-faint); letter-spacing:.02em;
+}
+footer .foot-copyright{font-weight:600; color:var(--text-dim);}
+
+@media (max-width:640px){
+  footer{padding:36px 16px 26px;}
+  footer .foot-top{flex-direction:column; align-items:flex-start; gap:14px; margin-bottom:22px;}
+  footer .foot-brand{flex-direction:column; align-items:center; gap:10px; width:100%; text-align:center;}
+  footer .foot-brand img.logo{height:32px;}
+  footer .foot-tagline{padding-left:0; border-left:none;}
+  footer .foot-links{gap:14px 18px;}
+  footer .foot-rule{margin-bottom:20px;}
+  footer .foot-disclaimer{margin-bottom:20px;}
+  footer .foot-bottom{flex-direction:column; align-items:flex-start; gap:8px;}
+}
 
 /* ---------- Category-switch loader ----------
    Full-screen 3s takeover that plays every time a chip is clicked, before the
@@ -490,10 +536,16 @@ footer .brand img.logo{height:51px; width:auto; display:block;}
   animation:catCaptionPulse 1.7s ease-in-out infinite;
 }
 @keyframes catCaptionPulse{0%,100%{opacity:.5;}50%{opacity:1;}}
+.cat-loader-caption .scan-word{margin-right:.5em;}
 @media (max-width:640px){
   .cat-loader-caption{font-size:10.5px; letter-spacing:.17em; padding:0 30px;}
+  /* Force "Scanning" and the category name onto their own lines -- on a
+     narrow phone width a long category name (e.g. "Christian World News")
+     would otherwise soft-wrap mid-phrase and strand a single word alone. */
+  .cat-loader-caption .scan-word,
+  .cat-loader-caption .scan-cat{display:block; margin-right:0;}
+  .cat-loader-caption .scan-cat{margin-top:6px;}
 }
-@media (max-width:840px){ footer .brand img.logo{height:49px;} }
 
 /* ==========================================================================
    Archive / search overlay + "browse older stories" link
@@ -553,3 +605,18 @@ footer .brand img.logo{height:51px; width:auto; display:block;}
   .archive-panel{max-width:none; width:100%; height:100%; max-height:none; border-radius:0;}
   .archive-cat-filter{display:none;}
 }
+
+/* ==========================================================================
+   Browse page (browse.html) — full archive, filterable by section, with
+   real photo cards (replaces the old bare-text search overlay + dropdown).
+   ========================================================================== */
+.browse-hero{max-width:900px; margin:0 auto; padding:36px clamp(16px,4vw,48px) 8px; text-align:center;}
+.browse-hero h1{font-size:clamp(28px,4vw,38px); margin:0 0 8px; font-weight:700;}
+.browse-sub{font-size:12.5px; color:var(--text-faint); margin:0 0 22px;}
+.browse-search{
+  width:100%; max-width:520px; margin:0 auto 18px; display:block;
+  background:var(--surface); border:1px solid var(--border); border-radius:100px;
+  padding:11px 18px; font-size:14px; color:var(--text); text-align:center;
+}
+.browse-search::placeholder{color:var(--text-faint);}
+.browse-search:focus{outline:none; border-color:var(--border-strong);}
