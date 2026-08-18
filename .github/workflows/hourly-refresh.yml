@@ -36,10 +36,10 @@ jobs:
         run: |
           git config user.name "12F Automation"
           git config user.email "ai@12f.news"
-          if git diff --quiet -- index.html archive.json; then
+          if git diff --quiet -- index.html archive.json status.txt; then
             echo "No changes -- skipping commit."
           else
-            git add index.html archive.json
+            git add index.html archive.json status.txt
             git commit -m "Automated hourly news refresh"
             # Someone else (a manual push, an overlapping delayed run) may have
             # moved origin/main since we checked out -- rebase onto it and

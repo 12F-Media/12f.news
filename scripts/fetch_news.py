@@ -286,8 +286,9 @@ def is_today(dt, now):
 
 # Per-run record of every feed we attempted, so we can verify -- without
 # needing shell/log access -- that every configured source is actually
-# coming through. Read back after a run via the AUTO:SOURCESTATUS comment
-# committed into index.html.
+# coming through. Read back after a run via status.txt, committed to the
+# repo but never referenced by index.html, so it's never rendered on the
+# live page.
 SOURCE_STATS = []
 
 
@@ -528,20 +529,21 @@ def render_bias_js():
     return "  const BIAS = {\n    " + body + ",\n  };"
 
 
-def render_source_status(now):
-    """A hidden HTML comment recording exactly what each configured feed
-    returned this run -- lets us verify from the committed index.html
-    (via the GitHub API) that every configured source is really coming
-    through, without needing shell/log access to the Actions runner."""
+STATUS_PATH = "status.txt"
+
+
+def write_source_status(now):
+    """Plain-text diagnostics written to their own file (status.txt) --
+    NOT embedded in index.html and never rendered on the page. Lets us
+    verify what each configured feed returned this run (via the GitHub
+    API/repo, not the live site) without needing shell/log access to the
+    Actions runner."""
     stamp = now.astimezone(ET).strftime("%Y-%m-%d %H:%M UTC")
     lines = [f"Source status as of {stamp}:"]
     for source_name, category, count, note in SOURCE_STATS:
         lines.append(f"  {source_name} / {category}: {count} items ({note})")
-    body = "\n".join(lines)
-    # HTML comments can't safely contain "--" -- collapse any so a feedparser
-    # exception message (or similar) can never accidentally close the comment.
-    body = body.replace("--", "—")
-    return f"\n{body}\n      "
+    with open(STATUS_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def replace_between(html_text, start_marker, end_marker, new_body, inline=False):
@@ -722,8 +724,7 @@ def main():
     stamp = now.astimezone(ET).strftime("%b %-d, %Y, %-I:%M %p ET") if _supports_dash(now) else now.astimezone(ET).strftime("%b %d, %Y, %I:%M %p ET")
     html_text = replace_between(html_text, "<!-- AUTO:UPDATED_START -->", "<!-- AUTO:UPDATED_END -->", stamp, inline=True)
 
-    if "<!-- AUTO:SOURCESTATUS_START -->" in html_text:
-        html_text = replace_between(html_text, "<!-- AUTO:SOURCESTATUS_START -->", "<!-- AUTO:SOURCESTATUS_END -->", render_source_status(now), inline=True)
+    write_source_status(now)
 
     open(INDEX_PATH, "w", encoding="utf-8").write(html_text)
     print("index.html rewritten successfully.")
