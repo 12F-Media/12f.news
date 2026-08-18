@@ -366,7 +366,7 @@ def render_flat_item(item, now, with_photo=False):
     byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
     meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
     if with_photo and item["image"]:
-        return (f'<div class="flat-item flat-item-photo" data-today="{today}">\n'
+        return (f'<div class="flat-item flat-item-photo" data-cat="{item["category"]}" data-today="{today}">\n'
                 f'        <div class="media"><img class="cover-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
                 f'referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'"><div class="photo-credit">Photo: via {esc(item["source"])}</div></div>\n'
                 f'        {byline}\n'
@@ -376,7 +376,7 @@ def render_flat_item(item, now, with_photo=False):
                 f'      </div>')
     thumb = f'<img class="thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' if item["image"] else ""
     if thumb:
-        return (f'<div class="flat-item" data-today="{today}">\n'
+        return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}">\n'
                 f'        {byline}\n'
                 f'        <div class="story-row">\n'
                 f'          {thumb}\n'
@@ -387,7 +387,7 @@ def render_flat_item(item, now, with_photo=False):
                 f'          </div>\n'
                 f'        </div>\n'
                 f'      </div>')
-    return (f'<div class="flat-item" data-today="{today}">\n'
+    return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}">\n'
             f'        {byline}\n'
             f'        <h3>{esc(item["title"])}</h3>\n'
             f'        <p>{esc(dek)}</p>\n'
@@ -442,6 +442,71 @@ def pick(pool, n, used):
     return out
 
 
+def pick_with_image(pool, used):
+    """Like pick(pool, 1, used), but prefers a candidate that has an image
+    when one is available nearby, so the front-page lead story (and each
+    section's featured card) doesn't end up photo-less just because the
+    single freshest item happened not to carry an image."""
+    fallback = None
+    for item in pool:
+        if item["url"] in used:
+            continue
+        if item["image"]:
+            used.add(item["url"])
+            return item
+        if fallback is None:
+            fallback = item
+    if fallback is not None:
+        used.add(fallback["url"])
+    return fallback
+
+
+def diversify(pool, key=lambda it: it["source"]):
+    """Round-robin a recency-sorted pool across a key (source, or category)
+    so one prolific outlet can't crowd out everyone else -- e.g. WORLD
+    Magazine posting six times in a row no longer buries CBN/Christian
+    Post/Faithwire, and Fox News posting frequently no longer buries NPR/
+    NBC/The Hill in Politics. Recency is preserved within each bucket and
+    bucket order follows first-seen (i.e. most-recently-active) order."""
+    buckets = {}
+    order = []
+    for item in pool:
+        k = key(item)
+        if k not in buckets:
+            buckets[k] = []
+            order.append(k)
+        buckets[k].append(item)
+    out = []
+    i = 0
+    remaining = sum(len(v) for v in buckets.values())
+    while remaining:
+        k = order[i % len(order)]
+        if buckets[k]:
+            out.append(buckets[k].pop(0))
+            remaining -= 1
+        i += 1
+    return out
+
+
+def build_top_pool(by_category, categories):
+    """A single feed for the front page's Top Stories / Briefing / Digest /
+    Ticker / Wire that's a genuine mix -- politics, world (incl. sports and
+    travel via ESPN/Condé Nast Traveler), markets, Christian, and tech all
+    represented -- rather than whichever category happened to publish most
+    recently dominating the whole front page."""
+    per_cat = {c: diversify(by_category[c]) for c in categories}
+    out = []
+    i = 0
+    remaining = sum(len(v) for v in per_cat.values())
+    while remaining:
+        c = categories[i % len(categories)]
+        if per_cat[c]:
+            out.append(per_cat[c].pop(0))
+            remaining -= 1
+        i += 1
+    return out
+
+
 def main():
     now = datetime.now(timezone.utc)
     by_category = collect_all(now)
@@ -457,26 +522,34 @@ def main():
 
     used = set()
 
-    # Top pool: politics + world + a splash of everything, most-recent-first,
-    # for the lead story / sub stories / briefing / digest / ticker / wire.
-    top_pool = []
-    for cat in ("politics", "world", "markets", "christian", "tech"):
-        top_pool.extend(by_category[cat])
-    top_pool.sort(key=lambda it: it["dt"] or datetime(1970, 1, 1, tzinfo=timezone.utc), reverse=True)
+    # Top pool: a genuine mix of politics + world (incl. sports/travel) +
+    # markets + Christian + tech, round-robined both across categories and
+    # across sources within each category, so the front page reflects a real
+    # cross-section of what's breaking right now instead of whichever single
+    # category or outlet happened to post most recently.
+    top_pool = build_top_pool(by_category, ("politics", "world", "markets", "christian", "tech"))
 
-    lead = pick(top_pool, 1, used)
-    subs = pick(top_pool, 3, used)
-    briefing = pick(top_pool, 3, used)
-    digest = pick(top_pool, 5, used)
-    ticker_items = pick(top_pool, 11, used) or (lead + subs)
-    wire_items = pick(top_pool, 13, set()) or ticker_items  # wire allowed to overlap ticker
+    lead_item = pick_with_image(top_pool, used)
+    lead = [lead_item] if lead_item else []
+    subs = pick(top_pool, 5, used)
+    briefing = pick(top_pool, 4, used)
+    digest = pick(top_pool, 10, used)
+    ticker_items = pick(top_pool, 14, used) or (lead + subs)
+    wire_items = pick(top_pool, 16, set()) or ticker_items  # wire allowed to overlap ticker
 
-    markets_pool = by_category["markets"]
-    christian_pool = by_category["christian"]
+    # Markets / Christian sections: diversified across every source that
+    # feeds that category (not just recency) so, e.g., the Christian World
+    # News grid actually shows CBN, Christian Post, Christianity Today,
+    # Religion News Service and Faithwire alongside WORLD Magazine, and
+    # Markets shows MarketWatch/Investing.com alongside the wire services.
+    markets_pool = diversify(by_category["markets"])
+    christian_pool = diversify(by_category["christian"])
     markets_used = set()
     christian_used = set()
-    markets_items = pick(markets_pool, 4, markets_used)
-    christian_items = pick(christian_pool, 6, christian_used)
+    markets_lead = pick_with_image(markets_pool, markets_used)
+    markets_items = ([markets_lead] if markets_lead else []) + pick(markets_pool, 5, markets_used)
+    christian_lead = pick_with_image(christian_pool, christian_used)
+    christian_items = ([christian_lead] if christian_lead else []) + pick(christian_pool, 7, christian_used)
 
     if not lead:
         print("No lead story available -- aborting without touching index.html", file=sys.stderr)
