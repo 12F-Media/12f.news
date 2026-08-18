@@ -15,11 +15,18 @@ run -- we never let one flaky feed break the whole refresh.
 import html
 import random
 import re
+import socket
 import sys
 import unicodedata
 from datetime import datetime, timezone, timedelta
 
 import feedparser
+
+# Hard cap on every network call this script makes. feedparser has no
+# per-request timeout of its own -- without this, a single slow or
+# bot-protected source (several of the 20 configured here are known to be
+# aggressive about it) could stall the entire hourly run indefinitely.
+socket.setdefaulttimeout(15)
 
 try:
     from zoneinfo import ZoneInfo
