@@ -1,0 +1,45 @@
+name: Hourly news refresh
+
+on:
+  schedule:
+    # Runs at the top of every hour (UTC). GitHub may delay a few minutes
+    # under load, which is expected and fine for an hourly refresh.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hourly-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out site
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Fetch news and rewrite index.html
+        run: python scripts/fetch_news.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "12F Automation"
+          git config user.email "ai@12f.news"
+          if git diff --quiet -- index.html; then
+            echo "No changes -- skipping commit."
+          else
+            git add index.html
+            git commit -m "Automated hourly news refresh"
+            git push
+          fi
