@@ -400,6 +400,41 @@ def update_archive(by_category, now):
     return archive
 
 
+def backfill_from_archive(by_category, archive, min_count=8):
+    """If a category came back thin this hour -- a source is down, blocked,
+    or just quiet (ESPN's feed, for example, frequently returns nothing) --
+    top it up with the most recent archived items for that category so the
+    section/tab never goes empty just because one source had a bad hour.
+    Archived items used this way are tagged backfilled=True so downstream
+    selection can treat them as lower priority than genuinely fresh ones."""
+    for cat, items in by_category.items():
+        fresh_count = len(items)
+        if fresh_count >= min_count:
+            continue
+        have = {it["url"] for it in items}
+        needed = min_count - fresh_count
+        added = 0
+        for a in archive:
+            if added >= needed:
+                break
+            if a["category"] != cat or a["url"] in have:
+                continue
+            have.add(a["url"])
+            items.append({
+                "source": a["source"], "domain": a["domain"], "bias": a["bias"],
+                "lean": SOURCES.get(a["source"], {}).get("lean", {}).get(cat, CAT_KICKER.get(cat, "")),
+                "category": cat, "title": a["title"], "summary": a.get("summary", ""),
+                "url": a["url"], "image": a.get("image"),
+                "dt": datetime.fromtimestamp(a["ts"], tz=timezone.utc) if a.get("ts") else None,
+                "backfilled": True,
+            })
+            added += 1
+        if added:
+            print(f"Backfilled {cat} with {added} archived item(s) ({fresh_count} fresh this hour)")
+        items.sort(key=lambda it: it["dt"] or datetime(1970, 1, 1, tzinfo=timezone.utc), reverse=True)
+    return by_category
+
+
 def bias_dot_mini(bias):
     label = BIAS_LABEL.get(bias, "Center")
     return f'<span class="bias-dot-mini {bias}" title="Source bias rating: {label}"></span>'
@@ -643,8 +678,15 @@ def main():
     # Grow the permanent archive with whatever real items we got this run,
     # even if it's a thin run -- articles that make it in never age out of
     # search/browse, regardless of what ends up on the front page below.
-    update_archive(by_category, now)
+    archive = update_archive(by_category, now)
 
+    # Top up any category that came back thin this run (a blocked/broken
+    # feed -- ESPN's has been unreliable -- or just a quiet news hour) with
+    # recent archived items, so a single bad source never empties out an
+    # entire section or tab.
+    by_category = backfill_from_archive(by_category, archive)
+
+    total = sum(len(v) for v in by_category.values())
     if total < 10:
         print("Too few items fetched (possible widespread feed outage) -- aborting without touching index.html", file=sys.stderr)
         sys.exit(1)
