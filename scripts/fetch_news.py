@@ -659,8 +659,8 @@ def main():
     lead_item = pick_with_image(top_pool, used)
     lead = [lead_item] if lead_item else []
     subs = pick(top_pool, 6, used)
-    briefing = pick(top_pool, 5, used)
-    digest = pick(top_pool, 14, used)
+    briefing = pick(top_pool, 4, used)
+    digest = pick(top_pool, 4, used)
     ticker_items = pick(top_pool, 18, used) or (lead + subs)
     wire_items = pick(top_pool, 20, set()) or ticker_items  # wire allowed to overlap ticker
 
