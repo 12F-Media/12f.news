@@ -1,4 +1,4 @@
-Source status as of 2026-08-18 11:33 UTC:
+Source status as of 2026-08-18 12:23 UTC:
   The Hill / politics: 8 items (ok)
   The Hill / markets: 8 items (ok)
   The Hill / world: 8 items (ok)
@@ -20,7 +20,11 @@ Source status as of 2026-08-18 11:33 UTC:
   CNBC / politics: 8 items (ok)
   CNBC / markets: 8 items (ok)
   CNBC / tech: 8 items (ok)
-  ESPN / sports: 0 items (0 entries)
+  ESPN / sports: 0 items (error: HTTP Error 403: Forbidden)
+  ESPN / sports: 0 items (error: HTTP Error 403: Forbidden)
+  ESPN / sports: 0 items (error: HTTP Error 403: Forbidden)
+  ESPN / sports: 0 items (error: HTTP Error 403: Forbidden)
+  ESPN / sports: 0 items (error: HTTP Error 403: Forbidden)
   Condé Nast Traveler / world: 8 items (ok)
   CBN News / christian: 8 items (ok)
   Christian Post / christian: 8 items (ok)
@@ -37,4 +41,8 @@ Source status as of 2026-08-18 11:33 UTC:
   Politico / politics: 0 items (0 entries)
   Yahoo Sports / sports: 8 items (ok)
   Vanity Fair / culture: 8 items (ok)
+  New York Post / politics: 8 items (ok)
   New York Post / world: 8 items (ok)
+  New York Post / markets: 8 items (ok)
+  New York Post / sports: 8 items (ok)
+  New York Post / culture: 8 items (ok)
