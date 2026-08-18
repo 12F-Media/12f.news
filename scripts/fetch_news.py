@@ -2,12 +2,14 @@
 """
 12F hourly refresh script.
 
-Pulls fresh headlines from each configured source's RSS feed, sorts them into
-the site's existing categories (politics / markets / christian / world /
-tech), and rewrites the static sections of index.html between AUTO: markers.
-Nothing here talks to any AI model or paid API -- it's plain RSS parsing plus
-deterministic templating, designed to run unattended, forever, on GitHub
-Actions' own schedule.
+Pulls fresh headlines from each configured source's RSS feed (or, for a
+handful of sources whose RSS has been discontinued, a source's own free
+public JSON endpoint -- see FETCHERS below), sorts them into the site's
+existing categories (politics / markets / christian / world / tech / sports /
+culture), and rewrites the static sections of index.html between AUTO:
+markers. Nothing here talks to any AI model or paid API -- it's plain RSS/JSON
+parsing plus deterministic templating, designed to run unattended, forever,
+on GitHub Actions' own schedule.
 
 If a feed is down or returns nothing, that source is just skipped for this
 run -- we never let one flaky feed break the whole refresh.
@@ -100,9 +102,21 @@ SOURCES = {
         },
     },
     "ESPN": {
+        # ESPN decommissioned its public RSS feeds -- espn.com/espn/rss/news
+        # now 404s/redirects. ESPN's own web app still runs on this
+        # unofficial-but-open JSON endpoint, so this source is fetched via
+        # fetch_espn_json() (see "fetcher" below) instead of feedparser.
+        # Feed keys here are just labels (single_category forces every one
+        # of them into "sports" regardless of the key name).
         "domain": "espn.com", "bias": "bias-C", "lean": {"sports": "Sports"},
-        "single_category": "sports",
-        "feeds": {"sports": "https://www.espn.com/espn/rss/news"},
+        "single_category": "sports", "fetcher": "espn_json",
+        "feeds": {
+            "nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news",
+            "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news",
+            "mlb": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/news",
+            "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/news",
+            "cfb": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/news",
+        },
     },
     "Condé Nast Traveler": {
         "domain": "cntraveler.com", "bias": "bias-C", "lean": {"world": "Travel"},
@@ -182,9 +196,24 @@ SOURCES = {
         "feeds": {"culture": "https://www.vanityfair.com/feed/rss"},
     },
     "New York Post": {
-        "domain": "nypost.com", "bias": "bias-R", "lean": {"world": "World"},
-        "single_category": "world",
-        "feeds": {"world": "https://nypost.com/feed/"},
+        # The general https://nypost.com/feed/ mixes every section together
+        # (including Page Six celebrity content) and forced everything into
+        # "world" -- switched to NYP's own per-section feeds so each story
+        # lands in its real category, same pattern as The Hill/Fox/NBC/CNBC
+        # above. exclude_domains is a belt-and-suspenders filter: some NYP
+        # sections co-syndicate Page Six stories, and this drops any entry
+        # that links out to pagesix.com regardless of which feed it came
+        # from, so "New York Post" never sends a reader to Page Six.
+        "domain": "nypost.com", "bias": "bias-R",
+        "lean": {"politics": "Politics", "world": "World", "markets": "Business", "sports": "Sports", "culture": "Entertainment"},
+        "exclude_domains": ["pagesix.com"],
+        "feeds": {
+            "politics": "https://nypost.com/politics/feed/",
+            "world": "https://nypost.com/world-news/feed/",
+            "markets": "https://nypost.com/business/feed/",
+            "sports": "https://nypost.com/sports/feed/",
+            "culture": "https://nypost.com/entertainment/feed/",
+        },
     },
 }
 
@@ -303,11 +332,19 @@ def fetch_source_category(source_name, cfg, category, url, limit=8):
         print(f"WARN: no entries for {source_name}/{category} ({url})", file=sys.stderr)
         SOURCE_STATS.append((source_name, category, 0, "0 entries"))
         return []
+    # Optional per-source domain blocklist (e.g. New York Post's own feeds
+    # sometimes co-syndicate Page Six celebrity stories) -- filtered before
+    # the limit is applied so a blocked entry never crowds out a real one.
+    exclude_domains = cfg.get("exclude_domains") or []
     out = []
-    for e in feed.entries[:limit]:
+    for e in feed.entries:
+        if len(out) >= limit:
+            break
         title = clean_text(e.get("title", ""))
         link = e.get("link", "")
         if not title or not link:
+            continue
+        if exclude_domains and any(dom in link for dom in exclude_domains):
             continue
         summary = clean_text(e.get("summary", "") or e.get("description", ""))
         out.append({
@@ -326,15 +363,82 @@ def fetch_source_category(source_name, cfg, category, url, limit=8):
     return out
 
 
+def fetch_espn_json(source_name, cfg, category, url, limit=8):
+    """ESPN has no public RSS anymore -- this hits the same open JSON
+    endpoint ESPN's own web app uses (site.api.espn.com/apis/site/v2/...),
+    still a free, unauthenticated, non-AI, non-paid API, consistent with
+    how every other source here is fetched."""
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as ex:
+        print(f"WARN: exception fetching {source_name}/{category}: {ex}", file=sys.stderr)
+        SOURCE_STATS.append((source_name, category, 0, f"error: {ex}"))
+        return []
+    articles = data.get("articles") or []
+    if not articles:
+        print(f"WARN: no entries for {source_name}/{category} ({url})", file=sys.stderr)
+        SOURCE_STATS.append((source_name, category, 0, "0 entries"))
+        return []
+    exclude_domains = cfg.get("exclude_domains") or []
+    out = []
+    for a in articles:
+        if len(out) >= limit:
+            break
+        if a.get("type") not in (None, "Story"):
+            continue  # skip video-clip entries, keep real articles
+        title = clean_text(a.get("headline", ""))
+        link = ((a.get("links") or {}).get("web") or {}).get("href", "")
+        if not title or not link:
+            continue
+        if exclude_domains and any(dom in link for dom in exclude_domains):
+            continue
+        summary = clean_text(a.get("description", ""))
+        image = None
+        images = a.get("images") or []
+        if images:
+            image = images[0].get("url")
+        dt = None
+        pub = a.get("published")
+        if pub:
+            try:
+                dt = datetime.strptime(pub, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            except Exception:
+                dt = None
+        out.append({
+            "source": source_name,
+            "domain": cfg["domain"],
+            "bias": cfg["bias"],
+            "lean": cfg.get("lean", {}).get(category, CAT_KICKER.get(category, "")),
+            "category": category,
+            "title": title,
+            "summary": summary,
+            "url": link,
+            "image": image,
+            "dt": dt,
+        })
+    SOURCE_STATS.append((source_name, category, len(out), "ok"))
+    return out
+
+
+FETCHERS = {
+    "espn_json": fetch_espn_json,
+}
+
+
 def collect_all(now):
     """Fetch every configured feed. Returns dict: category -> list[item]."""
     SOURCE_STATS.clear()
     by_category = {c: [] for c in ALL_CATEGORIES}
     for source_name, cfg in SOURCES.items():
         forced_cat = cfg.get("single_category")
+        fetcher = FETCHERS.get(cfg.get("fetcher"), fetch_source_category)
         for category, url in cfg["feeds"].items():
             target_cat = forced_cat or category
-            items = fetch_source_category(source_name, cfg, target_cat, url)
+            items = fetcher(source_name, cfg, target_cat, url)
             by_category[target_cat].extend(items)
     for cat, items in by_category.items():
         items.sort(key=lambda it: it["dt"] or datetime(1970, 1, 1, tzinfo=timezone.utc), reverse=True)
@@ -647,6 +751,30 @@ def diversify(pool, key=lambda it: it["source"]):
     return out
 
 
+def render_cat_grid(cat, items, now):
+    """A single category's full, dedicated card grid -- lives hidden inside
+    the lead column and is revealed (in place of the mixed top-stories feed)
+    whenever that category's nav chip is active. Every category gets one of
+    these now (not just Markets/Christian), and its items are drawn from the
+    same shared `used` dedup set as the homepage's lead/subs/briefing/digest,
+    so a category tab never shows an emptier, gappier echo of the homepage
+    nor a story that's already been shown elsewhere on the page."""
+    if not items:
+        return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}"></div>'
+    body = render_flat_item(items[0], now, with_photo=True)
+    for it in items[1:]:
+        body += "\n" + render_flat_item(it, now)
+    return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}">\n{body}\n      </div>'
+
+
+def render_explore_list(items, now):
+    """Compact teaser list (same markup as the 'What's News' digest) used by
+    the homepage-only 'browse more' rail panels, so the left/right columns
+    never run shorter than the lead column and leave visible blank space
+    beneath them."""
+    return "\n".join(render_digest_item(it, now) for it in items) if items else ""
+
+
 def build_top_pool(by_category, categories):
     """A single feed for the front page's Top Stories / Briefing / Digest /
     Ticker / Wire that's a genuine mix -- politics, world (incl. sports and
@@ -708,19 +836,42 @@ def main():
     ticker_items = pick(top_pool, 18, used) or (lead + subs)
     wire_items = pick(top_pool, 20, set()) or ticker_items  # wire allowed to overlap ticker
 
-    # Markets / Christian sections: diversified across every source that
-    # feeds that category (not just recency) so, e.g., the Christian World
-    # News grid actually shows CBN, Christian Post, Christianity Today,
-    # Religion News Service and Faithwire alongside WORLD Magazine, and
-    # Markets shows MarketWatch/Investing.com alongside the wire services.
-    markets_pool = diversify(by_category["markets"])
-    christian_pool = diversify(by_category["christian"])
-    markets_used = set()
-    christian_used = set()
-    markets_lead = pick_with_image(markets_pool, markets_used)
-    markets_items = ([markets_lead] if markets_lead else []) + pick(markets_pool, 5, markets_used)
-    christian_lead = pick_with_image(christian_pool, christian_used)
-    christian_items = ([christian_lead] if christian_lead else []) + pick(christian_pool, 7, christian_used)
+    # Every category (not just Markets/Christian) now gets its own dedicated,
+    # fully-populated card grid -- diversified across sources within that
+    # category and drawn from the SAME shared `used` dedup set as the
+    # homepage's lead/subs/briefing/digest, so a category tab can never show
+    # a story that's already sitting on the homepage, and never needs to
+    # fall back to filtering the small mixed top_pool down to a handful of
+    # gappy leftovers. If a category still comes back thin even after
+    # archive backfill, top it up ignoring `used` entirely (a little
+    # recirculation beats an empty tab).
+    cat_items = {}
+    for c in ALL_CATEGORIES:
+        pool = diversify(by_category[c])
+        lead_it = pick_with_image(pool, used)
+        items = ([lead_it] if lead_it else []) + pick(pool, 9, used)
+        if len(items) < 6:
+            have = {it["url"] for it in items}
+            for it in by_category[c]:
+                if len(items) >= 6:
+                    break
+                if it["url"] in have:
+                    continue
+                have.add(it["url"])
+                items.append(it)
+        cat_items[c] = items
+
+    markets_items = cat_items.get("markets", [])
+    christian_items = cat_items.get("christian", [])
+
+    # Homepage-only, desktop-only "browse more" teaser panels for the left/
+    # right rails -- reuses items already selected above (no extra dedup
+    # needed). Oversupplied (up to 4 per topic) on purpose: client-side JS
+    # trims each panel down to however many items fit before it would run
+    # past the bottom of the lead column, so the panel's bottom edge lines
+    # up with the top-stories column instead of over- or under-shooting it.
+    explore_right_items = (cat_items.get("tech") or [])[:4] + (cat_items.get("world") or [])[:4]
+    explore_left_items = (cat_items.get("sports") or [])[:4] + (cat_items.get("culture") or [])[:4]
 
     if not lead:
         print("No lead story available -- aborting without touching index.html", file=sys.stderr)
@@ -755,6 +906,12 @@ def main():
         for it in christian_items[1:]:
             c_html += "\n" + render_flat_item(it, now)
         html_text = replace_between(html_text, "<!-- AUTO:CHRISTIAN_START -->", "<!-- AUTO:CHRISTIAN_END -->", c_html)
+
+    catgrids_html = "\n".join(render_cat_grid(c, cat_items.get(c, []), now) for c in ALL_CATEGORIES)
+    html_text = replace_between(html_text, "<!-- AUTO:CATGRIDS_START -->", "<!-- AUTO:CATGRIDS_END -->", catgrids_html)
+
+    html_text = replace_between(html_text, "<!-- AUTO:EXPLORE_RIGHT_START -->", "<!-- AUTO:EXPLORE_RIGHT_END -->", render_explore_list(explore_right_items, now))
+    html_text = replace_between(html_text, "<!-- AUTO:EXPLORE_LEFT_START -->", "<!-- AUTO:EXPLORE_LEFT_END -->", render_explore_list(explore_left_items, now))
 
     if ticker_items:
         html_text = replace_between(html_text, "<!-- AUTO:TICKER_START -->", "<!-- AUTO:TICKER_END -->", render_ticker_js(ticker_items))
