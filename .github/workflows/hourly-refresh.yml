@@ -36,10 +36,27 @@ jobs:
         run: |
           git config user.name "12F Automation"
           git config user.email "ai@12f.news"
-          if git diff --quiet -- index.html; then
+          if git diff --quiet -- index.html archive.json; then
             echo "No changes -- skipping commit."
           else
-            git add index.html
+            git add index.html archive.json
             git commit -m "Automated hourly news refresh"
-            git push
+            # Someone else (a manual push, an overlapping delayed run) may have
+            # moved origin/main since we checked out -- rebase onto it and
+            # retry the push a couple of times instead of silently losing
+            # this run's refresh to a rejected non-fast-forward push.
+            success=0
+            for attempt in 1 2 3; do
+              if git push; then
+                success=1
+                break
+              fi
+              echo "Push rejected (attempt $attempt) -- fetching and rebasing before retrying."
+              git fetch origin main
+              git rebase origin/main
+            done
+            if [ "$success" != "1" ]; then
+              echo "::error::Could not push the automated refresh after retrying -- this run's update was lost."
+              exit 1
+            fi
           fi

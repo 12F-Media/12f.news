@@ -13,6 +13,7 @@ If a feed is down or returns nothing, that source is just skipped for this
 run -- we never let one flaky feed break the whole refresh.
 """
 import html
+import json
 import random
 import re
 import socket
@@ -35,6 +36,7 @@ except Exception:
     ET = timezone(timedelta(hours=-4))  # rough EDT fallback
 
 INDEX_PATH = "index.html"
+ARCHIVE_PATH = "archive.json"
 UA = "Mozilla/5.0 (compatible; 12FNewsBot/1.0; +https://12f.news)"
 
 # ---------------------------------------------------------------------------
@@ -346,6 +348,57 @@ def esc(text):
     return html.escape(text or "", quote=True)
 
 
+def ts_of(item):
+    """Unix epoch seconds for an item, or 0 if unknown -- embedded as
+    data-ts on every card so client-side JS can sort by real recency
+    instead of only whatever order the server picked."""
+    return int(item["dt"].timestamp()) if item["dt"] else 0
+
+
+# ---------------------------------------------------------------------------
+# Persistent archive: every article we've ever fetched, deduped by URL, kept
+# forever (not just whatever's currently on the front page) so search and
+# "browse older stories" have real history to draw on. Written as a flat
+# JSON file the static site fetches client-side -- there's no backend/
+# database here, this is the whole "database."
+# ---------------------------------------------------------------------------
+
+def load_archive():
+    try:
+        with open(ARCHIVE_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def update_archive(by_category, now):
+    archive = load_archive()
+    seen = {a["url"] for a in archive}
+    added = 0
+    for items in by_category.values():
+        for it in items:
+            if it["url"] in seen:
+                continue
+            seen.add(it["url"])
+            archive.append({
+                "title": it["title"],
+                "summary": truncate(it["summary"], 200),
+                "url": it["url"],
+                "source": it["source"],
+                "domain": it["domain"],
+                "bias": it["bias"],
+                "category": it["category"],
+                "image": it["image"],
+                "ts": ts_of(it) or int(now.timestamp()),
+            })
+            added += 1
+    archive.sort(key=lambda a: a["ts"], reverse=True)
+    with open(ARCHIVE_PATH, "w", encoding="utf-8") as f:
+        json.dump(archive, f, ensure_ascii=False, separators=(",", ":"))
+    print(f"Archive: +{added} new item(s), {len(archive)} total")
+    return archive
+
+
 def bias_dot_mini(bias):
     label = BIAS_LABEL.get(bias, "Center")
     return f'<span class="bias-dot-mini {bias}" title="Source bias rating: {label}"></span>'
@@ -370,7 +423,7 @@ def render_digest_item(item, now):
     meta_time = format_meta_time(item["dt"], now)
     today = "yes" if is_today(item["dt"], now) else "no"
     kicker = CAT_KICKER.get(item["category"], "News")
-    return (f'<li data-cat="{item["category"]}" data-today="{today}"><b>{esc(kicker)}:</b> {esc(dek)} '
+    return (f'<li data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}"><b>{esc(kicker)}:</b> {esc(dek)} '
             f'<span class="meta"><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["source"])} · {esc(meta_time)} ↗</a>'
             f'{bias_dot_mini(item["bias"])}</span></li>')
 
@@ -384,7 +437,7 @@ def render_lead_story(item, now):
         media = (f'<div class="media"><img class="cover-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
                   f'referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'">'
                   f'<div class="photo-credit">Photo: via {esc(item["source"])}</div></div>')
-    return (f'<article class="lead-story" data-cat="{item["category"]}" data-today="{today}">\n'
+    return (f'<article class="lead-story" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
             f'        <div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>\n'
             f'{media}\n'
             f'        <h2>{esc(item["title"])}</h2>\n'
@@ -398,7 +451,7 @@ def render_sub_story(item, now):
     meta_time = format_meta_time(item["dt"], now)
     today = "yes" if is_today(item["dt"], now) else "no"
     thumb = f'<img class="thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' if item["image"] else ""
-    return (f'<article class="sub-story" data-cat="{item["category"]}" data-today="{today}">\n'
+    return (f'<article class="sub-story" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
             f'        <div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>\n'
             f'        <div class="story-row">\n'
             f'          {thumb}\n'
@@ -417,8 +470,9 @@ def render_flat_item(item, now, with_photo=False):
     today = "yes" if is_today(item["dt"], now) else "no"
     byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
     meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    ts = ts_of(item)
     if with_photo and item["image"]:
-        return (f'<div class="flat-item flat-item-photo" data-cat="{item["category"]}" data-today="{today}">\n'
+        return (f'<div class="flat-item flat-item-photo" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
                 f'        <div class="media"><img class="cover-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
                 f'referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'"><div class="photo-credit">Photo: via {esc(item["source"])}</div></div>\n'
                 f'        {byline}\n'
@@ -428,7 +482,7 @@ def render_flat_item(item, now, with_photo=False):
                 f'      </div>')
     thumb = f'<img class="thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' if item["image"] else ""
     if thumb:
-        return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}">\n'
+        return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
                 f'        {byline}\n'
                 f'        <div class="story-row">\n'
                 f'          {thumb}\n'
@@ -439,7 +493,7 @@ def render_flat_item(item, now, with_photo=False):
                 f'          </div>\n'
                 f'        </div>\n'
                 f'      </div>')
-    return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}">\n'
+    return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
             f'        {byline}\n'
             f'        <h3>{esc(item["title"])}</h3>\n'
             f'        <p>{esc(dek)}</p>\n'
@@ -583,6 +637,11 @@ def main():
     print(f"Fetched {total} items across {len(by_category)} categories")
     for cat, items in by_category.items():
         print(f"  {cat}: {len(items)}")
+
+    # Grow the permanent archive with whatever real items we got this run,
+    # even if it's a thin run -- articles that make it in never age out of
+    # search/browse, regardless of what ends up on the front page below.
+    update_archive(by_category, now)
 
     if total < 10:
         print("Too few items fetched (possible widespread feed outage) -- aborting without touching index.html", file=sys.stderr)

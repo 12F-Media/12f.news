@@ -40,7 +40,7 @@
       <button class="icon-btn" id="themeToggle" title="Switch to dark mode" aria-label="Switch to dark mode">
         <svg id="themeToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button class="icon-btn" title="Search" aria-label="Search">
+      <button class="icon-btn" id="searchToggleBtn" title="Search" aria-label="Search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
     </div>
@@ -156,6 +156,7 @@
       </article>
 <!-- AUTO:LEAD_END -->
       <p class="empty-note" id="topStoriesEmpty" hidden>No stories in this category yet — check back after the next refresh.</p>
+      <button class="browse-archive-link mono" id="browseArchiveLink" type="button">Browse older stories →</button>
     </main>
 
     <aside class="rail rail-right">
@@ -296,6 +297,33 @@
       </div>
     </div>
   </footer>
+
+  <div class="archive-overlay" id="archiveOverlay" hidden>
+    <div class="archive-panel">
+      <div class="archive-panel-head">
+        <svg class="archive-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="archiveSearchInput" class="archive-input" placeholder="Search every article we've ever published…" autocomplete="off">
+        <select id="archiveCatFilter" class="archive-cat-filter" aria-label="Filter by category">
+          <option value="all">All categories</option>
+          <option value="politics">Politics</option>
+          <option value="markets">Markets</option>
+          <option value="christian">Christian World News</option>
+          <option value="world">World</option>
+          <option value="tech">Tech</option>
+          <option value="sports">Sports</option>
+          <option value="culture">Culture</option>
+        </select>
+        <button class="icon-btn" id="archiveCloseBtn" title="Close" aria-label="Close search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="archive-results" id="archiveResults"></div>
+      <div class="archive-panel-foot">
+        <button class="archive-load-more" id="archiveLoadMore" type="button" hidden>Load 20 more</button>
+        <span class="archive-status mono" id="archiveStatus"></span>
+      </div>
+    </div>
+  </div>
 
 <script>
   // Every item below is a real, currently-published headline (pulled from each
@@ -663,6 +691,200 @@
       applyTheme();
     });
     applyTheme();
+  })();
+
+  // ---------- Sort: Top (curated order) vs Recent (true chronological) ----------
+  // Every card already carries data-ts (unix seconds) from the server. "Top"
+  // restores the original curated DOM order; "Recent" re-sorts by data-ts.
+  (function(){
+    function tsOf(el){ return parseInt(el.getAttribute('data-ts') || '0', 10); }
+
+    // Lead column: the lead-story itself stays pinned (it's the one
+    // guaranteed-photo featured item); only the sub-stories beneath it,
+    // and the divider rules between them, get reordered.
+    function setupLeadSort(){
+      const leadCol = document.querySelector('.lead-col');
+      const labelEl = document.querySelector('.lead-col .kicker-row .sort b');
+      if(!leadCol || !labelEl) return;
+      const items = Array.from(leadCol.querySelectorAll('.sub-story'));
+      if(items.length < 2) return;
+      items.forEach(function(el, i){ el.setAttribute('data-rank', i); });
+      const anchor = items[0].previousElementSibling; // the hr right after the lead story
+      let mode = 'top';
+      function apply(){
+        const sorted = items.slice().sort(function(a, b){
+          if(mode === 'recent') return tsOf(b) - tsOf(a);
+          return parseInt(a.getAttribute('data-rank'), 10) - parseInt(b.getAttribute('data-rank'), 10);
+        });
+        items.forEach(function(el){
+          const next = el.nextElementSibling;
+          if(next && next.classList.contains('hr')) next.remove();
+          el.remove();
+        });
+        let insertAfter = anchor;
+        sorted.forEach(function(el, idx){
+          if(insertAfter && insertAfter.parentNode === leadCol){
+            insertAfter.insertAdjacentElement('afterend', el);
+          } else {
+            leadCol.insertBefore(el, leadCol.firstChild);
+          }
+          insertAfter = el;
+          if(idx < sorted.length - 1){
+            const hr = document.createElement('div');
+            hr.className = 'hr';
+            insertAfter.insertAdjacentElement('afterend', hr);
+            insertAfter = hr;
+          }
+        });
+        labelEl.textContent = (mode === 'recent' ? 'Recent' : 'Top') + ' ▾';
+      }
+      labelEl.style.cursor = 'pointer';
+      labelEl.setAttribute('role', 'button');
+      labelEl.setAttribute('tabindex', '0');
+      function toggle(){ mode = mode === 'top' ? 'recent' : 'top'; apply(); }
+      labelEl.addEventListener('click', toggle);
+      labelEl.addEventListener('keydown', function(e){
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
+      });
+    }
+
+    // Markets / Christian flat-grid sections: plain grid cards, no divider
+    // rules between them, so reordering is just re-appending in place.
+    function setupFlatGridSort(sec){
+      const labelEl = sec.querySelector('.kicker-row .sort b');
+      if(!labelEl) return;
+      const grid = sec.querySelector('.flat-grid') || sec;
+      const items = Array.from(grid.querySelectorAll('.flat-item'));
+      if(items.length < 2) return;
+      items.forEach(function(el, i){ el.setAttribute('data-rank', i); });
+      let mode = /latest/i.test(labelEl.textContent) ? 'recent' : 'top';
+      function apply(){
+        const sorted = items.slice().sort(function(a, b){
+          if(mode === 'recent') return tsOf(b) - tsOf(a);
+          return parseInt(a.getAttribute('data-rank'), 10) - parseInt(b.getAttribute('data-rank'), 10);
+        });
+        sorted.forEach(function(el){ grid.appendChild(el); });
+        labelEl.textContent = (mode === 'recent' ? 'Recent' : 'Top') + ' ▾';
+      }
+      labelEl.style.cursor = 'pointer';
+      labelEl.setAttribute('role', 'button');
+      labelEl.setAttribute('tabindex', '0');
+      function toggle(){ mode = mode === 'top' ? 'recent' : 'top'; apply(); }
+      labelEl.addEventListener('click', toggle);
+      labelEl.addEventListener('keydown', function(e){
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); }
+      });
+    }
+
+    setupLeadSort();
+    document.querySelectorAll('.section-flat').forEach(setupFlatGridSort);
+  })();
+
+  // ---------- Search + full archive browser ----------
+  // The page itself only ever shows a curated slice of recent stories.
+  // archive.json (written by the same hourly script, never pruned) holds
+  // every article we've ever fetched -- this panel is the only way to
+  // reach anything that's scrolled off the front page, by search or by
+  // "browse older stories" in whatever category is currently active.
+  (function(){
+    const overlay = document.getElementById('archiveOverlay');
+    const openBtn = document.getElementById('searchToggleBtn');
+    const closeBtn = document.getElementById('archiveCloseBtn');
+    const input = document.getElementById('archiveSearchInput');
+    const catFilter = document.getElementById('archiveCatFilter');
+    const resultsEl = document.getElementById('archiveResults');
+    const loadMoreBtn = document.getElementById('archiveLoadMore');
+    const statusEl = document.getElementById('archiveStatus');
+    const browseLink = document.getElementById('browseArchiveLink');
+    if(!overlay || !openBtn || !input) return;
+
+    const BIAS_LABEL = {'bias-L':'Left','bias-CL':'Lean Left','bias-C':'Center','bias-CR':'Lean Right','bias-R':'Right'};
+    const PAGE = 20;
+    let archiveData = null;
+    let filtered = [];
+    let visibleCount = 0;
+
+    function escHtml(s){
+      return (s || '').replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+
+    function fmtDate(ts){
+      if(!ts) return '';
+      const d = new Date(ts * 1000);
+      return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) +
+        ' · ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+    }
+
+    function renderList(){
+      const slice = filtered.slice(0, visibleCount);
+      resultsEl.innerHTML = slice.map(function(a){
+        return '<a class="archive-result" href="' + escHtml(a.url) + '" target="_blank" rel="noopener noreferrer">' +
+          '<span class="r-source">' + escHtml(a.source) + '</span>' +
+          '<div class="r-title">' + escHtml(a.title) + '</div>' +
+          '<span class="r-meta">' + escHtml(fmtDate(a.ts)) + (a.bias ? ' · ' + escHtml(BIAS_LABEL[a.bias] || '') : '') + '</span>' +
+        '</a>';
+      }).join('');
+      loadMoreBtn.hidden = visibleCount >= filtered.length;
+      statusEl.textContent = filtered.length
+        ? (Math.min(visibleCount, filtered.length) + ' of ' + filtered.length + ' articles')
+        : 'No articles found.';
+    }
+
+    function applyFilters(){
+      const q = input.value.trim().toLowerCase();
+      const cat = catFilter.value;
+      filtered = archiveData.filter(function(a){
+        if(cat !== 'all' && a.category !== cat) return false;
+        if(!q) return true;
+        return (a.title && a.title.toLowerCase().indexOf(q) !== -1) ||
+               (a.summary && a.summary.toLowerCase().indexOf(q) !== -1) ||
+               (a.source && a.source.toLowerCase().indexOf(q) !== -1);
+      });
+      visibleCount = Math.min(PAGE, filtered.length);
+      renderList();
+    }
+
+    function ensureData(cb){
+      if(archiveData){ cb(); return; }
+      statusEl.textContent = 'Loading archive…';
+      fetch('archive.json').then(function(r){ return r.json(); }).then(function(data){
+        archiveData = Array.isArray(data) ? data : [];
+        cb();
+      }).catch(function(){
+        archiveData = [];
+        statusEl.textContent = "Couldn't load the archive right now -- try again in a moment.";
+      });
+    }
+
+    function open(presetCat){
+      overlay.hidden = false;
+      catFilter.value = presetCat || 'all';
+      ensureData(applyFilters);
+      setTimeout(function(){ input.focus(); }, 30);
+    }
+    function close(){ overlay.hidden = true; }
+
+    openBtn.addEventListener('click', function(){ open(); });
+    if(browseLink){
+      browseLink.addEventListener('click', function(){
+        const activeChip = document.querySelector('.chip.active');
+        const cat = activeChip ? activeChip.getAttribute('data-cat') : 'all';
+        open(cat === 'today' ? 'all' : cat);
+      });
+    }
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function(e){ if(e.target === overlay) close(); });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape' && !overlay.hidden) close();
+    });
+    input.addEventListener('input', function(){ if(archiveData) applyFilters(); });
+    catFilter.addEventListener('change', function(){ if(archiveData) applyFilters(); });
+    loadMoreBtn.addEventListener('click', function(){
+      visibleCount = Math.min(visibleCount + PAGE, filtered.length);
+      renderList();
+    });
   })();
 </script>
 
