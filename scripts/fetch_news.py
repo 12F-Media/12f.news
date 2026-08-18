@@ -98,9 +98,9 @@ SOURCES = {
         },
     },
     "ESPN": {
-        "domain": "espn.com", "bias": "bias-C", "lean": {"world": "Sports"},
-        "single_category": "world",
-        "feeds": {"world": "https://www.espn.com/espn/rss/news"},
+        "domain": "espn.com", "bias": "bias-C", "lean": {"sports": "Sports"},
+        "single_category": "sports",
+        "feeds": {"sports": "https://www.espn.com/espn/rss/news"},
     },
     "Condé Nast Traveler": {
         "domain": "cntraveler.com", "bias": "bias-C", "lean": {"world": "Travel"},
@@ -147,10 +147,51 @@ SOURCES = {
         "single_category": "christian",
         "feeds": {"christian": "https://feeds.christianitytoday.com/christianitytoday/ctmag"},
     },
+    "WSJ": {
+        "domain": "wsj.com", "bias": "bias-C", "lean": {"world": "World"},
+        "single_category": "world",
+        "feeds": {"world": "https://feeds.a.dj.com/rss/RSSWorldNews.xml"},
+    },
+    "Washington Post": {
+        "domain": "washingtonpost.com", "bias": "bias-CL", "lean": {"politics": "National", "world": "World"},
+        "feeds": {
+            "politics": "https://feeds.washingtonpost.com/rss/national",
+            "world": "https://feeds.washingtonpost.com/rss/world",
+        },
+    },
+    "The Independent": {
+        "domain": "independent.co.uk", "bias": "bias-CL", "lean": {"world": "World"},
+        "single_category": "world",
+        "feeds": {"world": "https://www.the-independent.com/news/uk/rss"},
+    },
+    "Politico": {
+        "domain": "politico.com", "bias": "bias-CL", "lean": {"politics": "Politics"},
+        "single_category": "politics",
+        "feeds": {"politics": "https://www.politico.com/rss/politicopicks.xml"},
+    },
+    "Yahoo Sports": {
+        "domain": "sports.yahoo.com", "bias": "bias-C", "lean": {"sports": "Sports"},
+        "single_category": "sports",
+        "feeds": {"sports": "https://sports.yahoo.com/rss/"},
+    },
+    "Vanity Fair": {
+        "domain": "vanityfair.com", "bias": "bias-CL", "lean": {"culture": "Culture"},
+        "single_category": "culture",
+        "feeds": {"culture": "https://www.vanityfair.com/feed/rss"},
+    },
+    "New York Post": {
+        "domain": "nypost.com", "bias": "bias-R", "lean": {"world": "World"},
+        "single_category": "world",
+        "feeds": {"world": "https://nypost.com/feed/"},
+    },
 }
 
 BIAS_LABEL = {"bias-L": "Left", "bias-CL": "Lean Left", "bias-C": "Center", "bias-CR": "Lean Right", "bias-R": "Right"}
-CAT_KICKER = {"politics": "Politics", "markets": "Business", "world": "World", "tech": "Technology", "christian": "Faith"}
+CAT_KICKER = {
+    "politics": "Politics", "markets": "Business", "world": "World", "tech": "Technology",
+    "christian": "Faith", "sports": "Sports", "culture": "Culture",
+}
+ALL_CATEGORIES = ("politics", "world", "markets", "christian", "tech", "sports", "culture")
 
 IMG_TAG_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 TAG_RE = re.compile(r'<[^>]+>')
@@ -241,14 +282,23 @@ def is_today(dt, now):
     return dt.astimezone(ET).date() == now.astimezone(ET).date()
 
 
+# Per-run record of every feed we attempted, so we can verify -- without
+# needing shell/log access -- that every configured source is actually
+# coming through. Read back after a run via the AUTO:SOURCESTATUS comment
+# committed into index.html.
+SOURCE_STATS = []
+
+
 def fetch_source_category(source_name, cfg, category, url, limit=8):
     try:
         feed = feedparser.parse(url, agent=UA)
     except Exception as ex:
         print(f"WARN: exception fetching {source_name}/{category}: {ex}", file=sys.stderr)
+        SOURCE_STATS.append((source_name, category, 0, f"error: {ex}"))
         return []
     if not feed.entries:
         print(f"WARN: no entries for {source_name}/{category} ({url})", file=sys.stderr)
+        SOURCE_STATS.append((source_name, category, 0, "0 entries"))
         return []
     out = []
     for e in feed.entries[:limit]:
@@ -269,12 +319,14 @@ def fetch_source_category(source_name, cfg, category, url, limit=8):
             "image": extract_image(e),
             "dt": entry_datetime(e),
         })
+    SOURCE_STATS.append((source_name, category, len(out), "ok"))
     return out
 
 
 def collect_all(now):
     """Fetch every configured feed. Returns dict: category -> list[item]."""
-    by_category = {"politics": [], "markets": [], "world": [], "tech": [], "christian": []}
+    SOURCE_STATS.clear()
+    by_category = {c: [] for c in ALL_CATEGORIES}
     for source_name, cfg in SOURCES.items():
         forced_cat = cfg.get("single_category")
         for category, url in cfg["feeds"].items():
@@ -422,6 +474,22 @@ def render_bias_js():
     return "  const BIAS = {\n    " + body + ",\n  };"
 
 
+def render_source_status(now):
+    """A hidden HTML comment recording exactly what each configured feed
+    returned this run -- lets us verify from the committed index.html
+    (via the GitHub API) that every configured source is really coming
+    through, without needing shell/log access to the Actions runner."""
+    stamp = now.astimezone(ET).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [f"Source status as of {stamp}:"]
+    for source_name, category, count, note in SOURCE_STATS:
+        lines.append(f"  {source_name} / {category}: {count} items ({note})")
+    body = "\n".join(lines)
+    # HTML comments can't safely contain "--" -- collapse any so a feedparser
+    # exception message (or similar) can never accidentally close the comment.
+    body = body.replace("--", "—")
+    return f"\n{body}\n      "
+
+
 def replace_between(html_text, start_marker, end_marker, new_body, inline=False):
     pattern = re.compile(re.escape(start_marker) + r'.*?' + re.escape(end_marker), re.DOTALL)
     if not pattern.search(html_text):
@@ -522,20 +590,20 @@ def main():
 
     used = set()
 
-    # Top pool: a genuine mix of politics + world (incl. sports/travel) +
-    # markets + Christian + tech, round-robined both across categories and
+    # Top pool: a genuine mix of politics + world + markets + Christian +
+    # tech + sports + culture, round-robined both across categories and
     # across sources within each category, so the front page reflects a real
     # cross-section of what's breaking right now instead of whichever single
     # category or outlet happened to post most recently.
-    top_pool = build_top_pool(by_category, ("politics", "world", "markets", "christian", "tech"))
+    top_pool = build_top_pool(by_category, ALL_CATEGORIES)
 
     lead_item = pick_with_image(top_pool, used)
     lead = [lead_item] if lead_item else []
-    subs = pick(top_pool, 5, used)
-    briefing = pick(top_pool, 4, used)
-    digest = pick(top_pool, 10, used)
-    ticker_items = pick(top_pool, 14, used) or (lead + subs)
-    wire_items = pick(top_pool, 16, set()) or ticker_items  # wire allowed to overlap ticker
+    subs = pick(top_pool, 6, used)
+    briefing = pick(top_pool, 5, used)
+    digest = pick(top_pool, 14, used)
+    ticker_items = pick(top_pool, 18, used) or (lead + subs)
+    wire_items = pick(top_pool, 20, set()) or ticker_items  # wire allowed to overlap ticker
 
     # Markets / Christian sections: diversified across every source that
     # feeds that category (not just recency) so, e.g., the Christian World
@@ -594,6 +662,9 @@ def main():
 
     stamp = now.astimezone(ET).strftime("%b %-d, %Y, %-I:%M %p ET") if _supports_dash(now) else now.astimezone(ET).strftime("%b %d, %Y, %I:%M %p ET")
     html_text = replace_between(html_text, "<!-- AUTO:UPDATED_START -->", "<!-- AUTO:UPDATED_END -->", stamp, inline=True)
+
+    if "<!-- AUTO:SOURCESTATUS_START -->" in html_text:
+        html_text = replace_between(html_text, "<!-- AUTO:SOURCESTATUS_START -->", "<!-- AUTO:SOURCESTATUS_END -->", render_source_status(now), inline=True)
 
     open(INDEX_PATH, "w", encoding="utf-8").write(html_text)
     print("index.html rewritten successfully.")
