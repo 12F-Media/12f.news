@@ -266,9 +266,9 @@ a{color:inherit; text-decoration:none;}
 .briefing-title{display:flex; align-items:center; gap:7px; font-weight:600; font-size:14px; white-space:nowrap;}
 .briefing-title .dot{width:6px;height:6px;border-radius:50%;background:var(--up); box-shadow:0 0 8px var(--up); animation:pulse 2s infinite; flex:0 0 auto;}
 .briefing-time{font-size:9.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;}
-.briefing ul{list-style:none; margin:0; padding:0; color:var(--text); font-size:13px; line-height:1.55;}
-.briefing ul li{margin-bottom:9px; padding-bottom:9px; border-bottom:1px solid var(--border);}
-.briefing ul li:last-child{margin-bottom:0; padding-bottom:0; border-bottom:none;}
+.briefing ul{list-style:none; margin:0; padding:0;}
+.briefing ul li{margin:0 0 9px; padding:0; color:var(--text); font-size:13px; font-weight:400; line-height:1.55;}
+.briefing ul li:last-child{margin-bottom:0;}
 .briefing ul b{font-weight:600;}
 .briefing .cite{font-size:9.5px; color:var(--text-faint);}
 .briefing .cite a{color:var(--text-faint);}
