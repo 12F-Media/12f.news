@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#FFFFFF" id="themeColorMeta" />
+<title>12F — Caught up in 90 seconds</title>
+<link rel="icon" type="image/png" sizes="32x32" href="12f-favicon-32.png" id="faviconLink">
+<link rel="icon" type="image/png" sizes="16x16" href="12f-favicon-16.png" id="faviconLink16">
+<link rel="apple-touch-icon" sizes="180x180" href="12f-favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="12f.css">
+</head>
+<body>
+
+  <!-- Category-switch loader: full-screen 3s animation that plays every time a
+       chip is clicked, before the filtered articles are revealed. Theme-aware
+       via CSS custom properties (light bg in light mode, dark bg in dark mode). -->
+  <div class="cat-loader" id="catLoader" aria-hidden="true">
+    <canvas id="catLoaderCanvas"></canvas>
+    <div class="cat-loader-content" id="catLoaderContent">
+      <div class="cat-loader-caption mono" id="catLoaderCaption">SCANNING TOP STORIES</div>
+    </div>
+  </div>
+
+  <!-- Always-on live band — sticky at all times, the Soar/Bloomberg signature -->
+  <div class="ticker-wrap">
+    <div class="ticker-tag"><span class="ticker-dot"></span>LIVE</div>
+    <div class="ticker-track" id="tickerTrack"></div>
+  </div>
+
+  <!-- WSJ-style masthead: utility row, centered nameplate, rule, nav -->
+  <div class="masthead-utility">
+    <div class="utility-left mono">MON · AUG 17, 2026</div>
+    <div class="utility-right">
+      <button class="icon-btn" id="themeToggle" title="Switch to dark mode" aria-label="Switch to dark mode">
+        <svg id="themeToggleIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="icon-btn" title="Search" aria-label="Search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="masthead-logo">
+    <img id="logoMasthead" src="12f-logo-light.png" alt="12F" />
+  </div>
+
+  <div class="masthead-rule"></div>
+
+  <section class="search-band">
+    <div class="nav-row">
+      <div class="chip-row">
+        <div class="chip active" data-cat="all">Top Stories</div>
+        <div class="chip" data-cat="today">Today</div>
+        <div class="chip" data-cat="politics">Politics</div>
+        <div class="chip" data-cat="markets">Markets</div>
+        <div class="chip" data-cat="christian">Christian World News</div>
+        <div class="chip" data-cat="world">World</div>
+        <div class="chip" data-cat="tech">Tech</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Front page — three-column WSJ-density grid. Every headline below is a real,
+       currently-published story pulled live from each outlet's RSS feed — every
+       link points to the real article. -->
+  <section class="front-page" id="topics">
+
+    <aside class="rail rail-left">
+      <div class="briefing">
+        <div class="briefing-head">
+          <div class="briefing-title"><span class="dot"></span>AI Briefing</div>
+          <div class="briefing-time mono">Breaking News</div>
+        </div>
+        <ol>
+          <li><b>South Korea seeks talks after Trump scales back joint military exercises</b> — Seoul is pursuing continued dialogue despite the drawdown in U.S. troop participation. <span class="cite"><a href="https://thehill.com/policy/international/6033215-south-korea-seeks-trump-talks/" target="_blank" rel="noopener noreferrer">The Hill</a><span class="bias-dot-mini bias-C" title="Source bias rating: Center"></span></span></li>
+          <li><b>DHS defends surveilling its critics</b> — officials confirm ICE tracked a New York man over a critical email, raising free-speech concerns. <span class="cite"><a href="https://www.npr.org/2026/08/17/nx-s1-5934692/dhs-free-speech-investigations" target="_blank" rel="noopener noreferrer">NPR</a><span class="bias-dot-mini bias-CL" title="Source bias rating: Lean Left"></span></span></li>
+          <li><b>US-Iran ceasefire expires as Kushner arrives in Israel</b> — the USS Abraham Lincoln crew is headed home as envoys work the region amid the shifting truce. <span class="cite"><a href="https://www1.cbn.com/cbnnews/israel/2026/august/us-iran-ceasefire-expires-as-kushner-arrives-in-israel-uss-abraham-lincoln-crew-headed-home" target="_blank" rel="noopener noreferrer">CBN News</a><span class="bias-dot-mini bias-CR" title="Source bias rating: Lean Right"></span></span></li>
+        </ol>
+      </div>
+
+      <div class="kicker">What's News</div>
+      <ul class="digest-list">
+        <li data-cat="markets" data-today="yes"><b>Business:</b> Rising equity prices' wealth effect is helping consumers keep spending even as other signals flash caution. <span class="meta"><a href="https://www.marketwatch.com/story/the-stock-market-is-driving-the-economy-in-one-major-way-9ea09725?mod=mw_rss_topstories" target="_blank" rel="noopener noreferrer">MarketWatch · 9:35 AM ET ↗</a><span class="bias-dot-mini bias-C" title="Source bias rating: Center"></span></span></li>
+        <li data-cat="world" data-today="yes"><b>World:</b> Jared Kushner is expected to meet with Netanyahu amid Gaza negotiations, per NPR's Up First. <span class="meta"><a href="https://www.npr.org/2026/08/17/g-s1-138973/up-first-newsletter-uss-lincoln-meta-israel-hamas-ukraine-russia" target="_blank" rel="noopener noreferrer">NPR · 7:48 AM ET ↗</a><span class="bias-dot-mini bias-CL" title="Source bias rating: Lean Left"></span></span></li>
+        <li data-cat="politics" data-today="yes"><b>Defense:</b> Fifteen senators are demanding the Pentagon address welfare concerns aboard the USS Abraham Lincoln. <span class="meta"><a href="https://thehill.com/policy/defense/6033332-senators-demand-uss-abraham-lincoln-info/" target="_blank" rel="noopener noreferrer">The Hill · 11:50 AM ET ↗</a><span class="bias-dot-mini bias-C" title="Source bias rating: Center"></span></span></li>
+        <li data-cat="christian" data-today="yes"><b>Faith:</b> California's SB 934 could revive 17-year-old lawsuits against Christian counselors, raising new legal exposure for churches. <span class="meta"><a href="https://www.christianpost.com/voices/sb-934-threatens-counselors-and-churches-in-california.html" target="_blank" rel="noopener noreferrer">Christian Post · Today ↗</a><span class="bias-dot-mini bias-CR" title="Source bias rating: Lean Right"></span></span></li>
+        <li data-cat="politics" data-today="no"><b>Politics:</b> Trump backs a Republican challenger to oust New York AG Letitia James amid their ongoing mortgage-fraud feud. <span class="meta"><a href="https://www.foxnews.com/politics/trump-backs-republican-challenger-oust-letitia-james-amid-ongoing-mortgage-fraud-feud" target="_blank" rel="noopener noreferrer">Fox News · Sat ↗</a><span class="bias-dot-mini bias-CR" title="Source bias rating: Lean Right"></span></span></li>
+      </ul>
+      <p class="empty-note" id="digestEmpty" hidden>No stories in this category yet.</p>
+    </aside>
+
+    <main class="lead-col">
+      <div class="kicker-row"><span id="leadColLabel">Top Stories</span> <span class="sort">Sort: <b>Top ▾</b></span></div>
+
+      <article class="lead-story" data-cat="world" data-today="yes">
+        <div class="byline"><span class="source-tag">The Hill</span><span class="lean">Foreign Policy</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+<div class="media"><img class="cover-photo" src="https://thehill.com/wp-content/uploads/sites/2/2026/03/jae-myung_lee_south-korea_03032026_GettyImages-2264000405-1.jpg?w=900" alt="South Korean President Lee Jae-myung" referrerpolicy="no-referrer" onerror="this.closest('.media').style.display='none'"><div class="photo-credit">Photo: Getty Images, via The Hill</div></div>
+        <h2>South Korea hoping for talks after Trump reduces joint military exercises</h2>
+        <p class="dek">Seoul is seeking continued dialogue with the Trump administration after the announced reduction in U.S. troop participation in joint military operations, officials said Monday.</p>
+        <div class="byline"><span class="mono">11:26 AM ET</span><span>·</span><a href="https://thehill.com/policy/international/6033215-south-korea-seeks-trump-talks/" target="_blank" rel="noopener noreferrer">thehill.com ↗</a></div>
+      </article>
+
+      <div class="hr"></div>
+
+      <article class="sub-story" data-cat="politics" data-today="yes">
+        <div class="byline"><span class="source-tag">NPR</span><span class="lean">National</span><span class="bias-meter bias-CL" title="Source bias rating: Lean Left"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Left</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://npr.brightspotcdn.com/dims3/default/strip/false/crop/2128x1197+547+0/resize/1400/quality/85/format/jpeg/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2F45%2F8c%2F52ae56f74768b4ab07d4250de7d1%2Fsignal-cameras-2.jpg" alt="Federal agents at a New York home" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>DHS defends investigating agency critics and giving them warning notices</h3>
+            <p>Federal officials acknowledged that ICE special agents tracked a New York man to his house, the airport and a hotel to question him about a critical email.</p>
+            <div class="byline"><span class="mono">9:31 AM ET</span><span>·</span><a href="https://www.npr.org/2026/08/17/nx-s1-5934692/dhs-free-speech-investigations" target="_blank" rel="noopener noreferrer">npr.org ↗</a></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="hr"></div>
+
+      <article class="sub-story" data-cat="world" data-today="no">
+        <div class="byline"><span class="source-tag">Fox News</span><span class="lean">Foreign Policy</span><span class="bias-meter bias-CR" title="Source bias rating: Lean Right"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Right</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://static.foxnews.com/foxnews.com/content/uploads/2026/08/Robert-Gilman-1.jpg" alt="Robert Gilman greeted upon his release from Russia" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>Advocate reveals freed Marine vet's physical, mental torment in Russian prison as 5 Americans remain held</h3>
+            <p>The advocate described the ordeal endured in Russian custody as five more Americans remain detained, underscoring the stakes of ongoing prisoner-exchange talks.</p>
+            <div class="byline"><span class="mono">Sat 3:27 PM ET</span><span>·</span><a href="https://www.foxnews.com/politics/advocate-tells-freed-marine-vet-physical-psychological-torment-russian-prison-5-americans-remain-held" target="_blank" rel="noopener noreferrer">foxnews.com ↗</a></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="hr"></div>
+
+      <article class="sub-story" data-cat="politics" data-today="yes">
+        <div class="byline"><span class="source-tag">NPR</span><span class="lean">National</span><span class="bias-meter bias-CL" title="Source bias rating: Lean Left"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Left</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://npr.brightspotcdn.com/dims3/default/strip/false/crop/1024x576+0+83/resize/1400/quality/85/format/jpeg/?url=http%3A%2F%2Fnpr-brightspot.s3.amazonaws.com%2F06%2Ff7%2F467fbc894ed2af09c186fd198495%2Fgettyimages-2288271543.jpg" alt="Wildfire damage in Spokane, Washington" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>As wildfires get worse, some states are struggling to pass fire protection rules</h3>
+            <p>States face challenges implementing fire-safety regulations even where homeowner preparation resources are available.</p>
+            <div class="byline"><span class="mono">6:00 AM ET</span><span>·</span><a href="https://www.npr.org/2026/08/17/nx-s1-5923975/wildfires-western-community-protection" target="_blank" rel="noopener noreferrer">npr.org ↗</a></div>
+          </div>
+        </div>
+      </article>
+      <p class="empty-note" id="topStoriesEmpty" hidden>No stories in this category yet — check back after the next refresh.</p>
+    </main>
+
+    <aside class="rail rail-right">
+      <div class="kicker live"><span class="dot"></span>Live Wire</div>
+      <div class="live-wire-viewport">
+        <div class="live-wire-track" id="liveWireTrack"></div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="kicker">Markets <span class="mono" style="text-transform:none; letter-spacing:0; font-weight:500; color:var(--text-faint); font-size:9.5px;">— as of last close / today</span></div>
+      <div class="mini-markets">
+        <div class="mm-row"><span class="name">S&amp;P 500</span><span class="val mono">7,785.76<span class="chg down">▼ 0.2%</span></span></div>
+        <div class="mm-row"><span class="name">NASDAQ</span><span class="val mono">26,729.16<span class="chg down">▼ 0.3%</span></span></div>
+        <div class="mm-row"><span class="name">DOW</span><span class="val mono">53,732.41<span class="chg down">▼ 0.2%</span></span></div>
+        <div class="mm-row"><span class="name">10Y YIELD</span><span class="val mono">4.71%<span class="chg up">▲ 0.01</span></span></div>
+        <div class="mm-row"><span class="name">CRUDE OIL (WTI)</span><span class="val mono">$82.73<span class="chg up">▲ 0.40%</span></span></div>
+      </div>
+    </aside>
+
+  </section>
+
+  <!-- Below-fold — dense, flat, hairline-divided sections -->
+  <section class="section-flat" id="markets" data-section-cat="markets">
+    <div class="kicker-row">Markets <span class="sort">Sort: <b>Latest ▾</b></span></div>
+    <div class="markets">
+      <div class="mkt-cell"><div class="name">S&amp;P 500</div><div class="price mono">7,785.76</div><div class="chg mono down">▼ 0.2%</div></div>
+      <div class="mkt-cell"><div class="name">NASDAQ</div><div class="price mono">26,729.16</div><div class="chg mono down">▼ 0.3%</div></div>
+      <div class="mkt-cell"><div class="name">DOW</div><div class="price mono">53,732.41</div><div class="chg mono down">▼ 0.2%</div></div>
+      <div class="mkt-cell"><div class="name">10Y YIELD</div><div class="price mono">4.71%</div><div class="chg mono up">▲ 0.01</div></div>
+      <div class="mkt-cell"><div class="name">CRUDE OIL</div><div class="price mono">$82.73</div><div class="chg mono up">▲ 0.40%</div></div>
+    </div>
+    <div class="markets-note mono">S&amp;P 500 / Nasdaq / Dow shown at Friday, Aug 14 close (most recent session); 10Y yield &amp; crude oil are today's live levels.</div>
+    <div class="flat-grid">
+      <div class="flat-item flat-item-photo" data-today="no">
+        <div class="media"><img class="cover-photo" src="https://content-media.investing.com/news/LYNXMPEM4D1J3_1200_L.jpg" alt="S&P 500 trading floor" referrerpolicy="no-referrer" onerror="this.closest('.media').style.display='none'"><div class="photo-credit">Photo: Reuters</div></div>
+        <div class="byline"><span class="source-tag">Investing.com</span><span class="lean">Business</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <h3>Beneath the S&amp;P 500 rally: where performance and fundamentals diverge</h3>
+        <p>A look at which parts of the index are actually driving the record run — and which are lagging behind it.</p>
+        <div class="meta"><span class="mono">Aug 15</span><a href="https://www.investing.com/news/stock-market-news/beneath-the-sp-500-rally-where-performance-and-fundamentals-diverge-4861823" target="_blank" rel="noopener noreferrer">investing.com ↗</a></div>
+      </div>
+      <div class="flat-item" data-today="no">
+        <div class="byline"><span class="source-tag">Investing.com</span><span class="lean">Business</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://content-media.investing.com/news/Nvidia_800x533_L_1762265351.jpg" alt="Nvidia investment" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>Why Nvidia's $500bn investment mobilization is a positive for the stock</h3>
+            <p>Analysts say the chipmaker's massive capital deployment plan signals confidence in sustained AI demand.</p>
+            <div class="meta"><span class="mono">Aug 15</span><a href="https://www.investing.com/news/stock-market-news/why-nvidias-500bn-investment-mobilization-is-a-positive-for-the-stock-4861855" target="_blank" rel="noopener noreferrer">investing.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="flat-item" data-today="yes">
+        <div class="byline"><span class="source-tag">MarketWatch</span><span class="lean">Business</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <h3>The stock market is driving the economy in one major way</h3>
+        <p>The wealth effect of higher equity prices is helping consumers keep spending even as other indicators flash caution.</p>
+        <div class="meta"><span class="mono">9:35 AM ET</span><a href="https://www.marketwatch.com/story/the-stock-market-is-driving-the-economy-in-one-major-way-9ea09725?mod=mw_rss_topstories" target="_blank" rel="noopener noreferrer">marketwatch.com ↗</a></div>
+      </div>
+      <div class="flat-item" data-today="yes">
+        <div class="byline"><span class="source-tag">MarketWatch</span><span class="lean">Business</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <h3>The AI productivity payoff is coming. Here are 20 stocks primed to capture the gains as adoption spreads</h3>
+        <p>Goldman Sachs says investor focus is shifting from AI infrastructure plays toward productivity beneficiaries.</p>
+        <div class="meta"><span class="mono">9:30 AM ET</span><a href="https://www.marketwatch.com/story/the-ai-productivity-payoff-is-coming-here-are-20-stocks-primed-to-capture-the-gains-as-adoption-spreads-443842ac?mod=mw_rss_topstories" target="_blank" rel="noopener noreferrer">marketwatch.com ↗</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-flat" id="christian" data-section-cat="christian" style="padding-bottom:20px;">
+    <div class="kicker-row">Christian World News <span class="sort">Sort: <b>Top ▾</b></span></div>
+    <div class="flat-grid">
+      <div class="flat-item flat-item-photo" data-today="no">
+        <div class="media"><img class="cover-photo" src="https://religionnews.com/wp-content/uploads/2023/01/webRNS-Johnny-Hunt1.jpg" alt="Pastor Johnny Hunt preaching" referrerpolicy="no-referrer" onerror="this.closest('.media').style.display='none'"><div class="photo-credit">Photo: video screen grab, via Religion News Service</div></div>
+        <div class="byline"><span class="source-tag">Religion News Service</span><span class="lean">Faith</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <h3>Johnny Hunt's lawsuit is over. The SBC's abuse crisis isn't.</h3>
+        <p>A dismissed defamation lawsuit by a former Southern Baptist leader leaves the denomination's institutional reckoning with clergy abuse unresolved.</p>
+        <div class="meta"><span class="mono">Aug 14</span><a href="https://religionnews.com/2026/08/14/johnny-hunts-lawsuit-is-over-the-sbcs-abuse-crisis-isnt/" target="_blank" rel="noopener noreferrer">religionnews.com ↗</a></div>
+      </div>
+      <div class="flat-item" data-today="no">
+        <div class="byline"><span class="source-tag">Religion News Service</span><span class="lean">Faith</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://religionnews.com/wp-content/uploads/2026/08/webRNS-Amy-Jill-Levine1.jpg" alt="Amy-Jill Levine" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>A Jewish scholar of Jesus makes history as president of the Catholic Biblical Association</h3>
+            <p>Amy-Jill Levine is the first Jewish scholar elected to lead the association, recognized for her work in Jewish-Christian relations.</p>
+            <div class="meta"><span class="mono">Aug 14</span><a href="https://religionnews.com/2026/08/14/amy-jill-levine-elected-first-jewish-president-of-catholic-biblical-association/" target="_blank" rel="noopener noreferrer">religionnews.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="flat-item" data-today="no">
+        <div class="byline"><span class="source-tag">Religion News Service</span><span class="lean">Faith</span><span class="bias-meter bias-C" title="Source bias rating: Center"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Center</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://religionnews.com/wp-content/uploads/2026/08/webRNS-Executions-Bells2-807x608.jpg" alt="Church bell rung in protest of executions" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>With three prisoners scheduled for execution, southern churches toll their bells</h3>
+            <p>Faith communities across several states rang bells in protest as multiple executions were carried out the same day.</p>
+            <div class="meta"><span class="mono">Aug 13</span><a href="https://religionnews.com/2026/08/13/with-three-scheduled-for-execution-tennessee-churches-toll-their-bells/" target="_blank" rel="noopener noreferrer">religionnews.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="flat-item" data-today="yes">
+        <div class="byline"><span class="source-tag">CBN News</span><span class="lean">World</span><span class="bias-meter bias-CR" title="Source bias rating: Lean Right"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Right</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://cbn.com/sites/default/files/colombiaquakeob4.jpg" alt="Operation Blessing earthquake relief in Colombia" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>Operation Blessing joins with church partner to feed thousands of Colombia quake victims</h3>
+            <p>Volunteers are distributing meals, clean water and hygiene kits after a 7.4-magnitude earthquake left nearly 300 dead and thousands injured.</p>
+            <div class="meta"><span class="mono">11:06 AM ET</span><a href="https://cbn.com/news/world/operation-blessing-joins-church-partner-feed-thousands-colombia-quake-victims" target="_blank" rel="noopener noreferrer">cbn.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="flat-item" data-today="no">
+        <div class="byline"><span class="source-tag">Christian Post</span><span class="lean">Politics</span><span class="bias-meter bias-CR" title="Source bias rating: Lean Right"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Right</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://cdn.christianpost.com/files/original/thumbnail/27/15/271537.jpg?v=20260816162953" alt="World Vision food distribution" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>After USAID cuts, Trump admin. directs $2B to World Vision, Samaritan's Purse and other Christian humanitarian groups</h3>
+            <p>The redirected global-assistance funding shifts a major share of U.S. humanitarian aid toward faith-based relief organizations.</p>
+            <div class="meta"><span class="mono">Sun 4:29 PM ET</span><a href="https://www.christianpost.com/news/trump-admin-giving-2b-to-faith-based-groups-in-global-assistance.html" target="_blank" rel="noopener noreferrer">christianpost.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="flat-item" data-today="no">
+        <div class="byline"><span class="source-tag">Faithwire</span><span class="lean">World</span><span class="bias-meter bias-CR" title="Source bias rating: Lean Right"><span class="bias-track"><span class="bias-dot"></span></span><span class="bias-label">Lean Right</span></span></div>
+        <div class="story-row">
+          <img class="thumb" src="https://www.faithwire.com/wp-content/uploads/2026/08/AP18055661392359-1024x693.jpg" alt="Colosseum lit red for Christian persecution awareness" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <div class="story-col">
+            <h3>Christian persecution is exploding: new report reveals the world's worst hotspots</h3>
+            <p>A new global report tracks where Christians face the most severe persecution, from targeted violence to systemic legal discrimination.</p>
+            <div class="meta"><span class="mono">Aug 7</span><a href="https://www.faithwire.com/2026/08/07/christian-persecution-is-exploding-new-report-reveals-the-worlds-worst-hotspots/" target="_blank" rel="noopener noreferrer">faithwire.com ↗</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot-grid">
+      <div class="disclaimer">
+        <div class="brand"><img class="logo" id="logoFooter" src="12f-logo-light.png" alt="12F" /></div>
+        12F is an AI-assisted news aggregator. We do not host, republish, or edit article text — every headline links out to the original publisher. Photos on this page are pulled directly from each original publisher's own site and displayed with credit; we do not claim ownership of any photograph, and a story with no available image is shown as text only rather than a stock substitute. Summaries are AI-generated from public headlines and excerpts and may contain errors; always read the source before sharing. Placement across the political spectrum reflects our editorial curation policy, not a claim of neutrality by any single source.
+      </div>
+      <div class="foot-links">
+        <a href="#">About</a>
+        <a href="#">Our Sources</a>
+        <a href="#">Curation Policy</a>
+        <a href="#">Privacy</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+<script>
+  // Every item below is a real, currently-published headline (pulled from each
+  // outlet's RSS feed) linking to the real article — not placeholder text.
+
+  // Source bias ratings (AllSides-style), used to render the lean dot on every item.
+  const BIAS = {
+    "The Hill": "bias-C", "MarketWatch": "bias-C", "Investing.com": "bias-C",
+    "Religion News Service": "bias-C", "NPR": "bias-CL", "Fox News": "bias-CR",
+    "CBN News": "bias-CR", "Christian Post": "bias-CR", "Faithwire": "bias-CR",
+  };
+  function biasDot(src){
+    const cls = BIAS[src] || "bias-C";
+    return `<span class="bias-dot-mini ${cls}" title="Source bias rating"></span>`;
+  }
+
+  const headlines = [
+    ["BREAKING","South Korea hoping for talks after Trump reduces joint military exercises","The Hill","https://thehill.com/policy/international/6033215-south-korea-seeks-trump-talks/"],
+    ["","DHS defends investigating agency critics and giving them warning notices","NPR","https://www.npr.org/2026/08/17/nx-s1-5934692/dhs-free-speech-investigations"],
+    ["","Advocate reveals freed Marine vet's torment in Russian prison as 5 Americans remain held","Fox News","https://www.foxnews.com/politics/advocate-tells-freed-marine-vet-physical-psychological-torment-russian-prison-5-americans-remain-held"],
+    ["","The stock market is driving the economy in one major way","MarketWatch","https://www.marketwatch.com/story/the-stock-market-is-driving-the-economy-in-one-major-way-9ea09725?mod=mw_rss_topstories"],
+    ["","Johnny Hunt's lawsuit is over. The SBC's abuse crisis isn't.","Religion News Service","https://religionnews.com/2026/08/14/johnny-hunts-lawsuit-is-over-the-sbcs-abuse-crisis-isnt/"],
+    ["UPDATE","Beneath the S&P 500 rally: where performance and fundamentals diverge","Investing.com","https://www.investing.com/news/stock-market-news/beneath-the-sp-500-rally-where-performance-and-fundamentals-diverge-4861823"],
+    ["","As wildfires get worse, some states are struggling to pass fire protection rules","NPR","https://www.npr.org/2026/08/17/nx-s1-5923975/wildfires-western-community-protection"],
+    ["","Trump backs Republican challenger to oust Letitia James amid mortgage-fraud feud","Fox News","https://www.foxnews.com/politics/trump-backs-republican-challenger-oust-letitia-james-amid-ongoing-mortgage-fraud-feud"],
+    ["","Lake Powell, second-largest reservoir in US, hits record-low water level","The Hill","https://thehill.com/policy/energy-environment/6033231-lake-powell-record-low/"],
+    ["","US-Iran ceasefire expires as Kushner arrives in Israel","CBN News","https://www1.cbn.com/cbnnews/israel/2026/august/us-iran-ceasefire-expires-as-kushner-arrives-in-israel-uss-abraham-lincoln-crew-headed-home"],
+    ["","Trump admin. directs $2B to Christian humanitarian groups after USAID cuts","Christian Post","https://www.christianpost.com/news/trump-admin-giving-2b-to-faith-based-groups-in-global-assistance.html"],
+  ];
+  const track = document.getElementById('tickerTrack');
+  function renderTicker(){
+    const html = headlines.map(([tag,text,src,url]) =>
+      `<a class="ticker-item" href="${url}" target="_blank" rel="noopener noreferrer">${tag ? `<b>${tag}</b>` : ''}<span>${text}</span><span class="src">— ${src}</span>${biasDot(src)}</a>`
+    ).join('');
+    track.innerHTML = html + html; // duplicate for seamless loop
+  }
+  renderTicker();
+
+  const wireItems = [
+    ["11:50", "The Hill: senators demand answers from Hegseth on USS Abraham Lincoln", "https://thehill.com/policy/defense/6033332-senators-demand-uss-abraham-lincoln-info/", "The Hill"],
+    ["11:26", "The Hill: South Korea seeks talks after Trump cuts joint drills", "https://thehill.com/policy/international/6033215-south-korea-seeks-trump-talks/", "The Hill"],
+    ["9:35", "MarketWatch: stock market's wealth effect keeps consumers spending", "https://www.marketwatch.com/story/the-stock-market-is-driving-the-economy-in-one-major-way-9ea09725?mod=mw_rss_topstories", "MarketWatch"],
+    ["9:31", "NPR: DHS defends investigating agency critics", "https://www.npr.org/2026/08/17/nx-s1-5934692/dhs-free-speech-investigations", "NPR"],
+    ["7:48", "NPR: Kushner expected to meet Netanyahu on Gaza", "https://www.npr.org/2026/08/17/g-s1-138973/up-first-newsletter-uss-lincoln-meta-israel-hamas-ukraine-russia", "NPR"],
+    ["Sat", "Fox News: freed Marine vet's ordeal in Russian prison detailed", "https://www.foxnews.com/politics/advocate-tells-freed-marine-vet-physical-psychological-torment-russian-prison-5-americans-remain-held", "Fox News"],
+    ["Aug 15", "Investing.com: Nvidia's $500bn investment mobilization move", "https://www.investing.com/news/stock-market-news/why-nvidias-500bn-investment-mobilization-is-a-positive-for-the-stock-4861855", "Investing.com"],
+    ["Sat", "Fox News: Trump backs GOP challenger to oust Letitia James", "https://www.foxnews.com/politics/trump-backs-republican-challenger-oust-letitia-james-amid-ongoing-mortgage-fraud-feud", "Fox News"],
+    ["Aug 14", "Religion News: SBC abuse crisis continues after Hunt lawsuit dismissal", "https://religionnews.com/2026/08/14/johnny-hunts-lawsuit-is-over-the-sbcs-abuse-crisis-isnt/", "Religion News Service"],
+    ["6:00", "NPR: western states struggle to pass wildfire protection rules", "https://www.npr.org/2026/08/17/nx-s1-5923975/wildfires-western-community-protection", "NPR"],
+    ["Mon", "CBN News: ceasefire expires as Kushner arrives in Israel", "https://www1.cbn.com/cbnnews/israel/2026/august/us-iran-ceasefire-expires-as-kushner-arrives-in-israel-uss-abraham-lincoln-crew-headed-home", "CBN News"],
+    ["Sun", "Christian Post: $2B redirected to Christian humanitarian groups", "https://www.christianpost.com/news/trump-admin-giving-2b-to-faith-based-groups-in-global-assistance.html", "Christian Post"],
+    ["Aug 7", "Faithwire: report reveals worst hotspots for Christian persecution", "https://www.faithwire.com/2026/08/07/christian-persecution-is-exploding-new-report-reveals-the-worlds-worst-hotspots/", "Faithwire"],
+  ];
+  const wireTrack = document.getElementById('liveWireTrack');
+  function renderWire(){
+    const html = wireItems.map(([t,text,url,src]) =>
+      `<a class="wire-item" href="${url}" target="_blank" rel="noopener noreferrer"><span class="t mono">${t}</span><span class="txt">${text}</span>${biasDot(src)}</a>`
+    ).join('');
+    wireTrack.innerHTML = html + html; // duplicate for seamless vertical loop
+  }
+  renderWire();
+
+  // ---------- Category filtering ----------
+  // Clicking a chip narrows the front page to that category: individual
+  // articles in the Top Stories column and the "What's News" digest are
+  // shown/hidden by their own data-cat tag, while the below-fold Markets
+  // and Christian World News sections (each single-topic already) toggle
+  // as whole blocks via data-section-cat. The always-on widgets — ticker,
+  // AI Briefing, Live Wire, mini markets table — stay visible regardless,
+  // same as a real wire-service blotter would.
+  (function(){
+    const chips = document.querySelectorAll('.chip');
+    const leadColLabel = document.getElementById('leadColLabel');
+    const leadCol = document.querySelector('.lead-col');
+    const digestList = document.querySelector('.digest-list');
+    const topStoriesEmpty = document.getElementById('topStoriesEmpty');
+    const digestEmpty = document.getElementById('digestEmpty');
+    const sectionEls = document.querySelectorAll('[data-section-cat]');
+
+    function fixDividers(container){
+      Array.from(container.children).forEach(function(el){
+        if(!el.classList.contains('hr')) return;
+        const prev = el.previousElementSibling;
+        const next = el.nextElementSibling;
+        const prevOk = prev && prev.style.display !== 'none';
+        const nextOk = next && next.style.display !== 'none';
+        el.style.display = (prevOk && nextOk) ? '' : 'none';
+      });
+    }
+
+    function applyFilter(cat, label){
+      const showAll = cat === 'all';
+      const isToday = cat === 'today';
+
+      function itemMatches(el){
+        if(showAll) return true;
+        if(isToday) return el.dataset.today === 'yes';
+        return el.dataset.cat === cat;
+      }
+
+      let leadVisible = 0;
+      leadCol.querySelectorAll('[data-cat]').forEach(function(el){
+        const match = itemMatches(el);
+        el.style.display = match ? '' : 'none';
+        if(match) leadVisible++;
+      });
+      fixDividers(leadCol);
+      if(topStoriesEmpty) topStoriesEmpty.hidden = leadVisible > 0;
+
+      let digestVisible = 0;
+      digestList.querySelectorAll('[data-cat]').forEach(function(el){
+        const match = itemMatches(el);
+        el.style.display = match ? '' : 'none';
+        if(match) digestVisible++;
+      });
+      if(digestEmpty) digestEmpty.hidden = digestVisible > 0;
+
+      // Markets / Christian World News: normally toggled as whole blocks by
+      // topic, but "Today" cuts across topics, so it filters card-by-card
+      // within each section instead (using each card's own data-today).
+      sectionEls.forEach(function(sec){
+        if(isToday){
+          let visible = 0;
+          sec.querySelectorAll('.flat-item').forEach(function(item){
+            const match = item.dataset.today === 'yes';
+            item.style.display = match ? '' : 'none';
+            if(match) visible++;
+          });
+          sec.style.display = visible > 0 ? '' : 'none';
+        } else {
+          sec.querySelectorAll('.flat-item').forEach(function(item){ item.style.display = ''; });
+          const match = showAll || sec.dataset.sectionCat === cat;
+          sec.style.display = match ? '' : 'none';
+        }
+      });
+
+      if(leadColLabel) leadColLabel.textContent = label;
+    }
+
+    // ---------- Category-switch loader (3s animation before filtering) ----------
+    const CAT_LABELS = {
+      all: 'Scanning Top Stories',
+      today: "Scanning Today's Wire",
+      politics: 'Scanning Politics',
+      markets: 'Scanning Markets',
+      christian: 'Scanning Christian World News',
+      world: 'Scanning World',
+      tech: 'Scanning Tech',
+    };
+    const catLoaderEl = document.getElementById('catLoader');
+    const catLoaderCaption = document.getElementById('catLoaderCaption');
+    const catLoaderCanvas = document.getElementById('catLoaderCanvas');
+    const catLoaderContent = document.getElementById('catLoaderContent');
+    let catCtx = null, catAnimId = null, catRunning = false, catStartTime = 0, catCells = [];
+
+    const CAT_GLYPHS = '01ABCDEFGHIJKLMNOPQRSTUVWXYZ$#%&*+';
+
+    // Dense grid-based "ASCII-shaded sphere" — instead of a sparse scatter of
+    // individually-spaced glyphs, we sample a tight grid across the sphere's
+    // silhouette so it reads as one solid, glowing, textured blob (like a
+    // shaded 3D globe rendered entirely out of characters). Each cell holds
+    // a fixed screen position (nx, ny on the front hemisphere) plus a static
+    // per-cell light-shading value; only the glyph identity cycles over time
+    // and a slow rotating "phi" offset sweeps texture across the surface so
+    // it still visibly spins.
+    function initCatCells(cols){
+      const cells = [];
+      const half = cols / 2;
+      // fixed light direction (upper-left-ish), gives the sphere a lit
+      // crescent + darker shadow side, exactly like a shaded ASCII globe.
+      const lx = -0.45, ly = 0.55, lz = 0.70;
+      const llen = Math.sqrt(lx * lx + ly * ly + lz * lz);
+      const Lx = lx / llen, Ly = ly / llen, Lz = lz / llen;
+      for(let gy = -half; gy <= half; gy++){
+        for(let gx = -half; gx <= half; gx++){
+          const nx = gx / half, ny = gy / half;
+          const distSq = nx * nx + ny * ny;
+          if(distSq > 1) continue;
+          const nz = Math.sqrt(Math.max(0, 1 - distSq));
+          const brightness = Math.max(0, nx * Lx + ny * Ly + nz * Lz);
+          const edgeFade = 1 - Math.pow(distSq, 3.2);
+          const phi = Math.atan2(nx, nz);
+          cells.push({
+            nx: nx, ny: ny, brightness: brightness, edgeFade: edgeFade,
+            phi: phi, seed: Math.floor((gx + half) * 31 + (gy + half) * 17),
+          });
+        }
+      }
+      return cells;
+    }
+    function resizeCatCanvas(){
+      if(!catLoaderCanvas || !catCtx) return;
+      const dpr = window.devicePixelRatio || 1;
+      catLoaderCanvas.width = window.innerWidth * dpr;
+      catLoaderCanvas.height = window.innerHeight * dpr;
+      catCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function catGeometry(){
+      const w = window.innerWidth, h = window.innerHeight;
+      const mobile = w < 640;
+      // True center — the globe no longer sits offset above the caption;
+      // the caption is instead positioned below it independently.
+      const cx = w / 2, cy = h / 2;
+      const R = Math.min(w, h) * (mobile ? 0.19 : 0.15);
+      return { w: w, h: h, mobile: mobile, cx: cx, cy: cy, R: R };
+    }
+    function positionCatCaption(){
+      if(!catLoaderContent) return;
+      const geo = catGeometry();
+      const gap = geo.mobile ? 26 : 34;
+      catLoaderContent.style.top = Math.round(geo.cy + geo.R + gap) + 'px';
+    }
+    function catFrame(now){
+      if(!catRunning) return;
+      const elapsed = now - catStartTime;
+      const geo = catGeometry();
+      const w = geo.w, h = geo.h, cx = geo.cx, cy = geo.cy, R = geo.R, mobile = geo.mobile;
+      catCtx.clearRect(0, 0, w, h);
+
+      const cs = getComputedStyle(document.documentElement);
+      const glyphRgb = (cs.getPropertyValue('--cat-glyph-rgb') || '255,255,255').trim();
+
+      const rotation = elapsed * 0.00075;
+      const cellPx = R / (mobile ? 9 : 11.5);
+      const fontSize = cellPx * 1.05;
+      catCtx.textAlign = 'center';
+      catCtx.textBaseline = 'middle';
+      catCtx.font = '600 ' + fontSize.toFixed(1) + 'px "IBM Plex Mono", monospace';
+
+      for(let i = 0; i < catCells.length; i++){
+        const c = catCells[i];
+        const px = cx + c.nx * R, py = cy + c.ny * R;
+        // Rotating texture sweep across the fixed-shaded silhouette — this is
+        // what makes the still sphere visibly "spin" as it computes.
+        const tick = Math.floor((elapsed / 95) + (c.phi + rotation) * 6 + c.seed);
+        const glyph = CAT_GLYPHS[((tick % CAT_GLYPHS.length) + CAT_GLYPHS.length) % CAT_GLYPHS.length];
+        const alpha = Math.max(0, Math.min(1, (0.12 + c.brightness * 0.88) * c.edgeFade));
+        if(alpha < 0.05) continue;
+        catCtx.fillStyle = 'rgba(' + glyphRgb + ',' + alpha.toFixed(2) + ')';
+        catCtx.fillText(glyph, px, py);
+      }
+
+      // Monochrome data-arc: a single solid line with a small glowing dot
+      // that continuously travels along it, start to end, on a loop.
+      const startX = cx - R * 1.85, startY = cy + R * 0.55;
+      const endX = cx + R * 1.85, endY = cy - R * 0.85;
+      const ctrlX = cx, ctrlY = cy - R * 2.1;
+      function bez(t){
+        const mt = 1 - t;
+        return { x: mt * mt * startX + 2 * mt * t * ctrlX + t * t * endX,
+                 y: mt * mt * startY + 2 * mt * t * ctrlY + t * t * endY };
+      }
+      catCtx.beginPath();
+      catCtx.moveTo(startX, startY);
+      for(let i = 1; i <= 40; i++){ const pt = bez(i / 40); catCtx.lineTo(pt.x, pt.y); }
+      catCtx.strokeStyle = 'rgba(' + glyphRgb + ',0.28)';
+      catCtx.lineWidth = 1;
+      catCtx.stroke();
+
+      const sweepProgress = (elapsed % 1800) / 1800;
+      const head = bez(sweepProgress);
+      catCtx.beginPath();
+      catCtx.arc(head.x, head.y, 3.5, 0, Math.PI * 2);
+      catCtx.fillStyle = 'rgba(' + glyphRgb + ',0.95)';
+      catCtx.shadowColor = 'rgba(' + glyphRgb + ',0.9)';
+      catCtx.shadowBlur = 10;
+      catCtx.fill();
+      catCtx.shadowBlur = 0;
+
+      catAnimId = requestAnimationFrame(catFrame);
+    }
+    function startCatLoaderCanvas(){
+      if(catRunning || !catLoaderCanvas) return;
+      catCtx = catLoaderCanvas.getContext('2d');
+      catRunning = true;
+      catStartTime = performance.now();
+      catCells = initCatCells(window.innerWidth < 640 ? 20 : 26);
+      resizeCatCanvas();
+      positionCatCaption();
+      window.addEventListener('resize', resizeCatCanvas);
+      window.addEventListener('resize', positionCatCaption);
+      catAnimId = requestAnimationFrame(catFrame);
+    }
+    function stopCatLoaderCanvas(){
+      catRunning = false;
+      if(catAnimId) cancelAnimationFrame(catAnimId);
+      window.removeEventListener('resize', resizeCatCanvas);
+      window.removeEventListener('resize', positionCatCaption);
+      if(catCtx && catLoaderCanvas) catCtx.clearRect(0, 0, catLoaderCanvas.width, catLoaderCanvas.height);
+    }
+
+    let catLoaderTimer = null;
+    chips.forEach(function(chip){
+      chip.addEventListener('click', function(){
+        const cat = chip.dataset.cat;
+        const label = chip.textContent.trim();
+        chips.forEach(function(c){ c.classList.remove('active'); });
+        chip.classList.add('active');
+
+        if(catLoaderTimer) clearTimeout(catLoaderTimer);
+        if(catLoaderCaption) catLoaderCaption.textContent = (CAT_LABELS[cat] || 'Scanning').toUpperCase();
+        if(catLoaderEl){ catLoaderEl.classList.add('active'); catLoaderEl.setAttribute('aria-hidden', 'false'); }
+        startCatLoaderCanvas();
+
+        catLoaderTimer = setTimeout(function(){
+          applyFilter(cat, label);
+          if(catLoaderEl){ catLoaderEl.classList.remove('active'); catLoaderEl.setAttribute('aria-hidden', 'true'); }
+          stopCatLoaderCanvas();
+          catLoaderTimer = null;
+        }, 3000);
+      });
+    });
+  })();
+
+  // ---------- Light/dark theme toggle ----------
+  // Light mode is the default for a first-time visitor. Once someone picks a
+  // theme, it's remembered per-device via localStorage so it survives a page
+  // reload — it only changes again if they click the toggle themselves.
+  // localStorage is wrapped in try/catch: in contexts where browser storage
+  // is unavailable or blocked (e.g. a sandboxed preview), reads/writes just
+  // silently no-op and the page falls back to light-by-default for that
+  // session instead of throwing.
+  (function(){
+    const root = document.documentElement;
+    const toggle = document.getElementById('themeToggle');
+    const icon = document.getElementById('themeToggleIcon');
+    const logoMasthead = document.getElementById('logoMasthead');
+    const logoFooter = document.getElementById('logoFooter');
+    const themeColorMeta = document.getElementById('themeColorMeta');
+    const MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
+    const STORAGE_KEY = '12f-theme';
+
+    function readStoredTheme(){
+      try {
+        const v = window.localStorage.getItem(STORAGE_KEY);
+        return (v === 'dark' || v === 'light') ? v : null;
+      } catch (e) { return null; }
+    }
+    function writeStoredTheme(value){
+      try { window.localStorage.setItem(STORAGE_KEY, value); } catch (e) { /* storage unavailable — ignore */ }
+    }
+
+    let theme = readStoredTheme() || 'light';
+    function applyTheme(){
+      const dark = theme === 'dark';
+      root.dataset.theme = dark ? 'dark' : 'light';
+      logoMasthead.src = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      logoFooter.src = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      icon.innerHTML = dark ? SUN : MOON;
+      const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+      toggle.title = label;
+      toggle.setAttribute('aria-label', label);
+      themeColorMeta.setAttribute('content', dark ? '#0A0A0E' : '#FFFFFF');
+    }
+    toggle.addEventListener('click', function(){
+      theme = theme === 'light' ? 'dark' : 'light';
+      writeStoredTheme(theme);
+      applyTheme();
+    });
+    applyTheme();
+  })();
+</script>
+
+</body>
+</html>

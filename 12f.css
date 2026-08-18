@@ -1,0 +1,497 @@
+/* ==========================================================================
+   12F — stylesheet
+   Direction: WSJ front-page density meets Soar/flysoar.ai futurism.
+   Light mode is the default (WSJ-paper feel); dark mode is a toggle
+   (data-theme="dark" on <html>). The sticky ticker and the cover-art
+   illustration tiles are intentionally always-dark "chrome" — a fixed
+   signature accent that doesn't flip with the theme, same as a printed
+   masthead's ever-black nameplate rule. The logo swaps per theme (see
+   #logoMasthead / #logoFooter in the markup + the script at the bottom).
+   ========================================================================== */
+
+:root{
+    /* ---- Paper (light, default) ---- */
+    --bg:#FFFFFF;
+    --bg-elev:#F5F4EF;
+    --surface:#F7F6F1;
+    --surface-2:#EFEDE6;
+    --border:rgba(20,18,15,0.11);
+    --border-strong:rgba(20,18,15,0.20);
+    --text:#17171B;
+    --text-dim:#54525A;
+    --text-faint:#84828A;
+
+    --accent:#2F5FDB;        --accent-rgb:47,95,219;
+    --accent-dim:rgba(47,95,219,0.10);
+    --brass:#96731E;         --brass-rgb:150,115,30;
+    --live:#D93636;          --live-rgb:217,54,54;
+    --up:#1E9A61;            --up-rgb:30,154,97;
+    --down:#D64545;          --down-rgb:214,69,69;
+    --shadow-rgb:20,18,15;
+    --cat-glyph-rgb:0,0,0;
+
+    --radius:16px;
+    color-scheme: light;
+}
+
+:root[data-theme="dark"]{
+    /* ---- Night terminal (toggle) ---- */
+    --bg:#0A0A0E;
+    --bg-elev:#111114;
+    --surface:#15151A;
+    --surface-2:#1B1B21;
+    --border:rgba(255,255,255,0.08);
+    --border-strong:rgba(255,255,255,0.14);
+    --text:#F3F2ED;
+    --text-dim:#9C9CA3;
+    --text-faint:#66666E;
+
+    --accent:#5B8CFF;        --accent-rgb:91,140,255;
+    --accent-dim:rgba(91,140,255,0.14);
+    --brass:#C9A961;         --brass-rgb:201,169,97;
+    --live:#FF4B4B;          --live-rgb:255,75,75;
+    --up:#3DD68C;            --up-rgb:61,214,140;
+    --down:#FF6B6B;          --down-rgb:255,107,107;
+    --shadow-rgb:0,0,0;
+    --cat-glyph-rgb:255,255,255;
+
+    color-scheme: dark;
+}
+
+html{transition:none;}
+body, .ticker-wrap, .icon-btn, .briefing, .cover-art{
+  transition:background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(var(--accent-rgb),0.10), transparent 60%),
+    radial-gradient(1000px 500px at 90% 0%, rgba(var(--brass-rgb),0.08), transparent 55%),
+    var(--bg);
+  color:var(--text);
+  font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+a{color:inherit; text-decoration:none;}
+.mono{font-family:'IBM Plex Mono', monospace;}
+.serif{font-family:'Newsreader', serif;}
+
+/* ---------- Ticker — the signature always-on live band ----------
+   Follows the page theme: white/paper in light mode, dark chrome in dark
+   mode (toggle via data-theme). */
+.ticker-wrap{
+  position:sticky; top:0; z-index:80;
+  border-bottom:1px solid var(--border-strong);
+  box-shadow:0 1px 0 rgba(var(--accent-rgb),0.25), 0 12px 24px -12px rgba(var(--shadow-rgb),0.35);
+  background:var(--bg-elev);
+  overflow:hidden;
+  white-space:nowrap;
+  height:42px;
+  display:flex;
+  align-items:center;
+}
+.ticker-tag{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:0 16px;
+  height:100%;
+  background:rgba(var(--live-rgb),0.10);
+  border-right:1px solid var(--border);
+  color:var(--live);
+  font-size:11.5px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+.ticker-dot{width:6px;height:6px;border-radius:50%;background:var(--live);box-shadow:0 0 8px var(--live); animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+.ticker-track{
+  display:flex;
+  gap:52px;
+  padding-left:24px;
+  animation:scroll 40s linear infinite;
+}
+.ticker-wrap:hover .ticker-track{animation-play-state:paused;}
+@keyframes scroll{
+  0%{transform:translateX(0);}
+  100%{transform:translateX(-50%);}
+}
+.ticker-item{font-size:13px; color:var(--text-dim); display:flex; gap:8px; align-items:center; cursor:pointer;}
+.ticker-item:hover{color:var(--text);}
+.ticker-item:hover .src{color:var(--accent);}
+.ticker-item b{color:var(--text); font-weight:600;}
+.ticker-item .src{color:var(--text-faint); font-size:11px;}
+
+/* ---------- Masthead — WSJ-style centered nameplate ---------- */
+.masthead-utility{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px clamp(16px,4vw,48px);
+  border-bottom:1px solid var(--border);
+  font-size:12px; color:var(--text-faint);
+}
+.masthead-utility .utility-left{display:flex; align-items:center; gap:8px; white-space:nowrap;}
+.masthead-utility .utility-right{display:flex; align-items:center; gap:18px;}
+.masthead-utility .utility-right a{color:var(--text-dim); font-weight:500; white-space:nowrap;}
+.masthead-utility .utility-right a:hover{color:var(--text);}
+.masthead-utility .icon-btn{width:30px; height:30px; flex:0 0 auto;}
+@media (max-width:640px){
+  .masthead-utility .utility-right a{display:none;}
+  .masthead-utility .utility-right{gap:10px;}
+}
+
+.masthead-logo{text-align:center; padding:26px 16px 22px;}
+.masthead-logo img{
+  height:112px; width:auto; margin:0 auto; display:inline-block;
+  filter:drop-shadow(0 0 34px rgba(var(--accent-rgb),0.18));
+}
+@media (max-width:840px){
+  .masthead-logo{padding:20px 16px 16px;}
+  .masthead-logo img{height:74px;}
+}
+
+.masthead-rule{
+  height:1px; margin:0 clamp(16px,4vw,48px);
+  background:linear-gradient(90deg, transparent, var(--border-strong) 12%, var(--border-strong) 88%, transparent);
+}
+
+.icon-btn{
+  width:36px;height:36px;border-radius:10px;
+  border:1px solid var(--border);
+  background:none; appearance:none; font:inherit; padding:0; margin:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-dim); cursor:pointer;
+}
+.icon-btn:hover{border-color:var(--border-strong); color:var(--text);}
+.btn-primary{
+  background:var(--text); color:var(--bg); font-weight:600; font-size:12.5px;
+  padding:7px 14px; border-radius:9px; border:none; cursor:pointer;
+}
+
+/* ---------- Chip row — the site's single category nav, under the masthead ---------- */
+.search-band{padding:16px clamp(16px,4vw,48px) 0; text-align:center;}
+
+.nav-row{
+  display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap;
+}
+
+.chip-row{
+  display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+  max-width:900px;
+}
+.chip{
+  padding:7px 14px; border-radius:100px; border:1px solid var(--border);
+  font-size:13px; color:var(--text-dim); cursor:pointer; font-weight:500;
+  transition:.15s;
+}
+.chip:hover{border-color:var(--border-strong); color:var(--text);}
+.chip.active{background:var(--text); color:var(--bg); border-color:var(--text);}
+
+/* mobile — chips become a horizontally-scrollable strip instead of wrapping */
+@media (max-width:640px){
+  .search-band{padding:14px 0 0;}
+  .nav-row{flex-wrap:nowrap; gap:8px; padding:0 16px;}
+  .chip-row{
+    flex-wrap:nowrap; justify-content:flex-start; max-width:none; flex:1; min-width:0;
+    overflow-x:auto; scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    mask-image:linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+    padding-right:28px;
+  }
+  .chip-row::-webkit-scrollbar{display:none;}
+  .chip{white-space:nowrap; flex:0 0 auto; scroll-snap-align:start;}
+}
+
+/* ---------- Kickers (small-caps section labels, WSJ dept-head style) ---------- */
+.kicker{
+  font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--brass); margin-bottom:12px; display:flex; align-items:center; gap:7px;
+}
+.kicker.live{color:var(--live);}
+.kicker.live .dot{width:6px;height:6px;border-radius:50%;background:var(--live);box-shadow:0 0 8px var(--live); animation:pulse 1.6s infinite;}
+
+.kicker-row{
+  display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+  font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text);
+  padding-bottom:10px; margin-bottom:22px; border-bottom:1px solid var(--border-strong);
+}
+.kicker-row .sort{font-size:11px; font-weight:500; letter-spacing:0; text-transform:none; color:var(--text-faint);}
+.kicker-row .sort b{color:var(--text-dim); font-weight:600; cursor:pointer;}
+
+/* shown when a category filter (chip click) matches nothing in a column */
+.empty-note{
+  font-size:12.5px; font-style:italic; color:var(--text-faint);
+  padding:6px 0 2px; letter-spacing:0; text-transform:none; font-weight:400;
+}
+
+/* ---------- Front page — 3-column WSJ-density grid ---------- */
+.front-page{
+  max-width:1320px; margin:0 auto; padding:44px clamp(16px,4vw,48px) 0;
+  display:grid; grid-template-columns:232px 1fr 300px; column-gap:0;
+}
+.rail{padding:0 26px;}
+.rail-left{padding-left:0; border-right:1px solid var(--border);}
+.lead-col{padding:0 30px; border-right:1px solid var(--border);}
+.rail-right{padding-right:0;}
+
+@media (max-width:1100px){
+  .front-page{grid-template-columns:1fr; row-gap:40px;}
+  .rail-left, .lead-col{border-right:none; padding:0; border-bottom:1px solid var(--border); padding-bottom:32px;}
+  .rail-right{padding:0;}
+}
+
+/* compact AI briefing card, sits atop the left rail */
+.briefing{
+  background:linear-gradient(180deg, var(--surface), var(--bg-elev));
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px 20px 18px;
+  position:relative;
+  margin-bottom:26px;
+}
+.briefing::before{
+  content:"";
+  position:absolute; inset:0; border-radius:var(--radius);
+  padding:1px;
+  background:linear-gradient(135deg, rgba(var(--accent-rgb),0.5), rgba(var(--brass-rgb),0.25), transparent 60%);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  pointer-events:none;
+}
+.briefing-head{display:flex; flex-direction:column; align-items:flex-start; gap:3px; margin-bottom:14px;}
+.briefing-title{display:flex; align-items:center; gap:7px; font-weight:600; font-size:14px; white-space:nowrap;}
+.briefing-title .dot{width:6px;height:6px;border-radius:50%;background:var(--up); box-shadow:0 0 8px var(--up); animation:pulse 2s infinite; flex:0 0 auto;}
+.briefing-time{font-size:9.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; white-space:nowrap;}
+.briefing ol{margin:0; padding:0 0 0 16px; color:var(--text); font-size:13px; line-height:1.55;}
+.briefing ol li::marker{color:var(--brass); font-family:'IBM Plex Mono', monospace; font-size:11px;}
+.briefing ol li{margin-bottom:9px;}
+.briefing ol li:last-child{margin-bottom:0;}
+.briefing ol b{font-weight:600;}
+.briefing .cite{font-size:9.5px; color:var(--text-faint);}
+.briefing .cite a{color:var(--text-faint);}
+.briefing .cite a:hover{color:var(--accent); text-decoration:underline;}
+
+/* dense digest list — What's News, WSJ style */
+.digest-list{list-style:none; margin:0; padding:0;}
+.digest-list li{padding:12px 0; border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.5; color:var(--text-dim);}
+.digest-list li:last-child{border-bottom:none;}
+.digest-list li b{color:var(--text); font-weight:600;}
+.digest-list li .meta{display:block; margin-top:5px; font-size:10px; color:var(--text-faint); letter-spacing:.02em;}
+.digest-list li .meta a{color:var(--text-faint);}
+.digest-list li .meta a:hover{color:var(--accent); text-decoration:underline;}
+
+/* lead column — big story, then dense hairline-divided stories */
+.lead-story h2{
+  font-family:'Newsreader', serif; font-weight:700; text-transform:capitalize;
+  font-size:clamp(30px,3.4vw,46px); line-height:1.1; margin:10px 0 12px; letter-spacing:-0.01em;
+}
+.lead-story .dek{font-size:14.5px; color:var(--text-dim); line-height:1.62; margin-bottom:12px;}
+.byline{display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:11px; color:var(--text-faint);}
+.byline .source-tag{font-size:10.5px;}
+.byline a{color:var(--text-faint);}
+.byline a:hover{color:var(--accent); text-decoration:underline;}
+
+/* real, hotlinked article photography — pulled from the original publisher */
+.media{margin:10px 0 4px;}
+.cover-photo{
+  width:100%; aspect-ratio:16/9; border-radius:10px;
+  object-fit:cover; display:block;
+  border:1px solid rgba(255,255,255,0.10);
+  background:#111114;
+}
+.flat-item-photo .cover-photo{aspect-ratio:16/10;}
+
+.story-row{display:flex; gap:16px; align-items:flex-start; margin-top:2px;}
+.story-row .story-col{flex:1; min-width:0;}
+.thumb{
+  width:104px; height:104px; flex:0 0 auto; object-fit:cover; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface);
+}
+@media (max-width:480px){ .thumb{width:80px; height:80px;} }
+
+.cover-art{
+  width:100%; aspect-ratio:16/9; border-radius:10px; margin:10px 0 4px;
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(255,255,255,0.10);
+}
+.cover-art svg{width:34%; height:34%; position:relative; z-index:1; opacity:.85;}
+.cover-art::after{
+  content:""; position:absolute; inset:0;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0);
+  background-size:14px 14px;
+  mix-blend-mode:overlay;
+}
+.cover-art--geo{background:linear-gradient(135deg, #16233d, #0A0A0E 70%);}
+.cover-art--geo svg{color:var(--accent);}
+.cover-art--markets{background:linear-gradient(135deg, #241d0f, #0A0A0E 70%);}
+.cover-art--markets svg{color:var(--brass);}
+.cover-art--christian{background:linear-gradient(135deg, #241017, #0A0A0E 70%);}
+.cover-art--christian svg{color:var(--live);}
+.flat-item-photo .cover-art{aspect-ratio:16/10;}
+
+.photo-credit{font-size:9.5px; color:var(--text-faint); margin:0 0 10px; letter-spacing:.02em;}
+
+.markets-note{font-size:10.5px; color:var(--text-faint); margin:-16px 0 28px; letter-spacing:.01em;}
+
+.hr{height:1px; background:var(--border); margin:24px 0;}
+
+.sub-story h3{
+  font-family:'Newsreader', serif; font-weight:700; text-transform:capitalize; font-size:23px; line-height:1.24; margin:6px 0 8px;
+}
+.sub-story p{font-size:13px; color:var(--text-dim); line-height:1.58; margin:0 0 10px;}
+
+.source-tag{
+  font-size:11px; font-weight:700; letter-spacing:.05em; color:var(--brass);
+  text-transform:uppercase;
+}
+.lean{
+  font-size:9.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  padding:2px 7px; border-radius:5px; color:var(--text-faint); border:1px solid var(--border);
+}
+
+/* ============ Political-lean indicator — AllSides-style gradient track + dot ============
+   Applied per-article. Rating reflects the SOURCE's general editorial lean (not the
+   individual story). Scale: Left · Lean Left · Center · Lean Right · Right. */
+.bias-L  { --bias-color:#5B8CFF; }
+.bias-CL { --bias-color:#8FB3FF; }
+.bias-C  { --bias-color:#ADADB6; }
+.bias-CR { --bias-color:#FF9A8F; }
+.bias-R  { --bias-color:#FF6B6B; }
+
+.bias-meter{
+  display:inline-flex; align-items:center; gap:6px; margin-left:auto;
+  font-family:'IBM Plex Mono', monospace; font-size:8.5px; font-weight:600;
+  letter-spacing:.05em; text-transform:uppercase; color:var(--bias-color, var(--text-faint));
+  cursor:default;
+}
+.bias-track{
+  position:relative; width:30px; height:4px; border-radius:3px; flex:none;
+  background:linear-gradient(90deg,#5B8CFF 0%,#5B8CFF 14%,rgba(140,138,148,0.45) 42%,rgba(140,138,148,0.45) 58%,#FF6B6B 86%,#FF6B6B 100%);
+}
+.bias-dot{
+  position:absolute; top:50%; width:7px; height:7px; border-radius:50%;
+  background:var(--bg); border:1.5px solid var(--bias-color, var(--text-dim));
+  box-shadow:0 0 5px var(--bias-color, transparent);
+  transform:translate(-50%,-50%);
+}
+.bias-meter.bias-L  .bias-dot{ left:14%; }
+.bias-meter.bias-CL .bias-dot{ left:32%; }
+.bias-meter.bias-C  .bias-dot{ left:50%; }
+.bias-meter.bias-CR .bias-dot{ left:68%; }
+.bias-meter.bias-R  .bias-dot{ left:86%; }
+.bias-label{color:inherit;}
+
+/* compact dot-only variant for dense rows (digest list, ticker, live wire, briefing cites) */
+.bias-dot-mini{
+  display:inline-block; width:6px; height:6px; border-radius:50%; margin-left:5px;
+  vertical-align:middle; flex:none;
+  background:var(--bias-color, var(--text-faint));
+  box-shadow:0 0 4px var(--bias-color, transparent);
+}
+
+/* right rail — compact markets + live wire */
+.mini-markets{display:flex; flex-direction:column;}
+.mm-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:12.5px;}
+.mm-row:last-child{border-bottom:none;}
+.mm-row .name{color:var(--text-dim); font-weight:600;}
+.mm-row .val{font-family:'IBM Plex Mono', monospace; text-align:right;}
+.mm-row .val .chg{display:block; font-size:10.5px; margin-top:2px;}
+
+.live-wire-viewport{
+  height:280px; overflow:hidden; position:relative;
+  -webkit-mask-image:linear-gradient(to bottom, transparent, black 8%, black 92%, transparent);
+  mask-image:linear-gradient(to bottom, transparent, black 8%, black 92%, transparent);
+}
+.live-wire-track{display:flex; flex-direction:column; animation:wirescroll 24s linear infinite;}
+.live-wire-viewport:hover .live-wire-track{animation-play-state:paused;}
+@keyframes wirescroll{
+  0%{transform:translateY(0);}
+  100%{transform:translateY(-50%);}
+}
+.wire-item{display:block; padding:11px 0; border-bottom:1px solid var(--border); font-size:12px; line-height:1.45; cursor:pointer;}
+.wire-item:hover .txt{color:var(--text);}
+.wire-item .t{font-family:'IBM Plex Mono', monospace; font-size:10px; color:var(--live); margin-right:7px;}
+.wire-item .txt{color:var(--text-dim); transition:color .15s;}
+
+.up{color:var(--up);} .down{color:var(--down);}
+
+/* ---------- Below-fold sections — dense flat lists, no cards ---------- */
+.section-flat{max-width:1320px; margin:0 auto; padding:52px clamp(16px,4vw,48px) 0;}
+.flat-grid{display:grid; grid-template-columns:1fr 1fr; column-gap:44px;}
+@media (max-width:760px){ .flat-grid{grid-template-columns:1fr;} }
+.flat-item{padding:18px 0; border-bottom:1px solid var(--border);}
+.flat-item h3{
+  font-family:'Newsreader', serif; font-weight:700; text-transform:capitalize; font-size:21px; margin:6px 0 7px; line-height:1.26;
+}
+.flat-item p{margin:0; font-size:13px; color:var(--text-dim); line-height:1.55;}
+.flat-item .meta{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--text-faint); margin-top:10px;}
+.flat-item .meta a{color:var(--text-faint);}
+.flat-item .meta a:hover{color:var(--accent); text-decoration:underline;}
+
+/* compact markets strip used at top of Markets section */
+.markets{
+  display:grid; grid-template-columns:repeat(5,1fr); gap:1px;
+  background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+  margin-bottom:28px;
+}
+@media (max-width:760px){ .markets{grid-template-columns:repeat(2,1fr);} }
+.mkt-cell{background:var(--surface); padding:16px 18px;}
+.mkt-cell .name{font-size:11.5px; color:var(--text-faint); font-weight:600; letter-spacing:.03em;}
+.mkt-cell .price{font-family:'IBM Plex Mono', monospace; font-size:17px; font-weight:500; margin:6px 0 2px;}
+.mkt-cell .chg{font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:500;}
+
+/* ---------- Footer ---------- */
+footer{
+  margin-top:80px; border-top:1px solid var(--border);
+  padding:40px clamp(16px,4vw,48px) 60px;
+  color:var(--text-faint); font-size:12.5px; line-height:1.7;
+}
+footer .foot-grid{max-width:1320px; margin:0 auto; display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap;}
+footer .disclaimer{max-width:520px;}
+footer .foot-links{display:flex; gap:20px; flex-wrap:wrap;}
+footer .foot-links a{color:var(--text-dim);}
+footer .foot-links a:hover{color:var(--text);}
+footer .brand{font-size:14px; margin-bottom:12px; color:var(--text-dim); display:flex; align-items:center;}
+footer .brand img.logo{height:51px; width:auto; display:block;}
+
+/* ---------- Category-switch loader ----------
+   Full-screen 3s takeover that plays every time a chip is clicked, before the
+   filtered articles are revealed. Uses theme CSS custom properties throughout
+   so it's automatically light-themed in light mode and dark-themed in dark
+   mode — never hardcode literal colors here. */
+.cat-loader{
+  position:fixed; inset:0; z-index:999;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:opacity .5s ease, visibility 0s linear .5s;
+  background:
+    radial-gradient(ellipse 60% 40% at 28% 68%, rgba(var(--accent-rgb),0.10), transparent 60%),
+    radial-gradient(ellipse 50% 35% at 76% 24%, rgba(var(--brass-rgb),0.09), transparent 60%),
+    var(--bg);
+  background-size:220% 220%, 220% 220%, 100% 100%;
+  animation:catDrift 9s ease-in-out infinite alternate;
+}
+.cat-loader.active{opacity:1; visibility:visible; pointer-events:all; transition:opacity .5s ease, visibility 0s linear 0s;}
+@keyframes catDrift{
+  0%{background-position:15% 65%, 82% 18%, 0 0;}
+  100%{background-position:38% 42%, 58% 42%, 0 0;}
+}
+.cat-loader canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+.cat-loader-content{position:absolute; z-index:1; left:50%; top:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; transition:top .2s ease;}
+.cat-loader-caption{
+  font-size:12px; font-weight:500; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--text-dim); text-align:center;
+  text-shadow:0 0 10px rgba(var(--cat-glyph-rgb),0.35);
+  animation:catCaptionPulse 1.7s ease-in-out infinite;
+}
+@keyframes catCaptionPulse{0%,100%{opacity:.5;}50%{opacity:1;}}
+@media (max-width:640px){
+  .cat-loader-caption{font-size:10.5px; letter-spacing:.17em; padding:0 30px;}
+}
+@media (max-width:840px){ footer .brand img.logo{height:49px;} }
