@@ -292,18 +292,20 @@ a{color:inherit; text-decoration:none;}
 
 /* real, hotlinked article photography — pulled from the original publisher.
    aspect-ratio (not a fixed height) is what keeps these fluid with the
-   column's own width at every breakpoint, and object-position:center top
-   biases the crop toward the top of the frame -- news photography usually
-   puts faces/heads in the upper two-thirds, so a plain center-center crop
-   on a wide card was regularly slicing through foreheads/hairlines. Every
-   .cover-photo variant below (the default list-row size and the bigger
-   featured-card override) stays within a natural editorial landscape ratio
-   (16/9 or 3/2) rather than the much wider, more crop-prone ratios this
-   used before. */
+   column's own width at every breakpoint, and this box size is the ceiling
+   on how big any main-site article photo is ever allowed to get -- it never
+   grows past this aspect-ratio'd box no matter how large or oddly-shaped
+   the source image is.
+   object-fit:contain (not cover) is deliberate: on the main site (outside
+   the hero) we show the publisher's actual stock photo in full, uncropped
+   and unzoomed, rather than pushing into it to fill the box edge-to-edge.
+   Any letterboxing that leaves (photo narrower/taller than the box) is
+   filled by the dark background below rather than cutting off any part of
+   the original image. */
 .media{margin:10px 0 4px;}
 .cover-photo{
   width:100%; aspect-ratio:16/9; border-radius:10px;
-  object-fit:cover; object-position:center top;
+  object-fit:contain; object-position:center center;
   display:block;
   border:1px solid rgba(255,255,255,0.10);
   background:#111114;
@@ -313,7 +315,7 @@ a{color:inherit; text-decoration:none;}
 .story-row{display:flex; gap:16px; align-items:flex-start; margin-top:2px;}
 .story-row .story-col{flex:1; min-width:0;}
 .thumb{
-  width:104px; height:104px; flex:0 0 auto; object-fit:cover; border-radius:8px;
+  width:104px; height:104px; flex:0 0 auto; object-fit:contain; object-position:center center; border-radius:8px;
   border:1px solid var(--border); background:var(--surface);
 }
 @media (max-width:480px){ .thumb{width:80px; height:80px;} }
