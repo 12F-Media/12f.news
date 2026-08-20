@@ -749,11 +749,12 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 .hero-topbar{
   position:absolute; top:0; left:0; right:0; z-index:5;
   display:flex; align-items:center; justify-content:center;
-  /* Top padding set to 32px on desktop (see the max-width:900px override
-     further down for the 24px mobile value) to match the logo's intended
-     vertical anchor precisely rather than sharing a flat value with the
-     bottom/horizontal insets. */
-  padding:32px clamp(16px,4vw,40px) 20px;
+  /* Top padding set to 64px on desktop (see the max-width:900px override
+     further down for the 24px mobile value), measured directly off a24.com's
+     own nav row (page-top-to-nav-icon gap on a24films.com/films/onslaught
+     came out to ~65.5px in logical CSS pixels from a retina screenshot) so
+     the desktop hero topbar sits at the same vertical depth A24 uses. */
+  padding:64px clamp(16px,4vw,40px) 20px;
 }
 /* The actual brand mark now lives here (top-center of the hero) instead of
    the plain typed "12F" text this used to be, and instead of the small
