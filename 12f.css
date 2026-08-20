@@ -749,11 +749,11 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 .hero-topbar{
   position:absolute; top:0; left:0; right:0; z-index:5;
   display:flex; align-items:center; justify-content:center;
-  /* Top padding set to 18px on desktop (see the max-width:900px override
-     further down for the 14px mobile value) to match the logo's intended
+  /* Top padding set to 32px on desktop (see the max-width:900px override
+     further down for the 24px mobile value) to match the logo's intended
      vertical anchor precisely rather than sharing a flat value with the
      bottom/horizontal insets. */
-  padding:18px clamp(16px,4vw,40px) 20px;
+  padding:32px clamp(16px,4vw,40px) 20px;
 }
 /* The actual brand mark now lives here (top-center of the hero) instead of
    the plain typed "12F" text this used to be, and instead of the small
@@ -910,10 +910,10 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      "12F" wordmark in .hero-topbar would otherwise sit right under the
      status bar on notched phones. Pad the topbar down by the device's safe
      area inset (falls back to 0 on non-notched devices/older browsers,
-     leaving 14px as the effective minimum via max()) so the wordmark stays
+     leaving 24px as the effective minimum via max()) so the wordmark stays
      clear of the OS chrome while the photo behind it still extends all the
      way to the true top edge. */
-  .hero-topbar{padding-top:max(14px, env(safe-area-inset-top));}
+  .hero-topbar{padding-top:max(24px, env(safe-area-inset-top));}
   /* Viewport isolation: strictly clipped to the dynamic viewport (100dvh,
      with the 100vh fallback already set on .a24-hero above) with hidden
      overflow, so nothing from the main site (date line, filter pills, etc.)
