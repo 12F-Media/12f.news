@@ -131,6 +131,19 @@
 </button>
 </div>
 </div>
+<div class="masthead-logo">
+<!-- Adaptive site wordmark, shown once you've scrolled past the hero (the
+     hero has its own always-white text "12F" that never reacts to the
+     theme toggle by design). Reuses the site's existing official logo
+     files -- the same ones the footer already swaps between -- so there's
+     one consistent pair of logo assets across the whole page: the solid
+     black mark (12f-logo-light.png) for the light theme, and the
+     light-outline mark (12f-logo-dark.png) for the dark theme, matching
+     the filename convention already used by #logoFooter below. See
+     setAdaptiveLogo() further down, which runs on load and on every
+     toggle click. -->
+<img alt="12F" id="masthead12fLogo" src="12f-logo-light.png"/>
+</div>
 <div class="masthead-rule"></div>
 <section class="search-band">
 <div class="nav-row">
@@ -1166,6 +1179,29 @@
     const heroMobile = document.getElementById('heroMobile');
     const heroMobileCounter = document.getElementById('heroMobileCounter');
     let mobileActiveIndex = '0';
+
+    // ---------- Live band pause-on-interaction ----------
+    // Hovering the live band (desktop mouse) or pressing and holding it
+    // (mobile touch) pauses its horizontal scroll so a visitor can actually
+    // read the item under their cursor/finger; releasing resumes it right
+    // where it left off. Plain :hover (see .hero-ticker:hover .ticker-track
+    // in 12f.css) already covers the mouse case, but touch devices don't
+    // get a real, sustained :hover from a press-and-hold, so this toggles a
+    // `.ticker-touching` class (same CSS rule) via Pointer Events, which
+    // unify mouse/touch/pen into one API. No JS position tracking is
+    // needed either way -- animation-play-state:paused freezes the CSS
+    // animation at its exact current position, so play resumes seamlessly
+    // the instant the class comes off. Wired here (not gated behind the
+    // bgLayers check below) so it works even if the hero photos somehow
+    // fail to load.
+    if(ticker){
+      ticker.addEventListener('pointerdown', function(){ ticker.classList.add('ticker-touching'); });
+      const releaseTicker = function(){ ticker.classList.remove('ticker-touching'); };
+      ticker.addEventListener('pointerup', releaseTicker);
+      ticker.addEventListener('pointercancel', releaseTicker);
+      ticker.addEventListener('pointerleave', releaseTicker);
+    }
+
     if(!bgLayers.length) return;
 
     // Sample the brightness of just the strip of each photo that sits
@@ -1299,7 +1335,7 @@
       }
     }
 
-    // ---------- Live band dock/pin transition ----------
+    // ---------- Live band dock/pin transition + mobile re-entry reset ----------
     // While the hero is in view, the live band stays docked to its bottom
     // edge (transparent, photo-adaptive text via .light-bg above). The
     // moment the hero scrolls fully out of view -- same behavior on desktop
@@ -1307,19 +1343,33 @@
     // becoming a sticky bar fixed to the top of the viewport that matches
     // the site's light/dark theme instead of the photo. Scrolling back up
     // into the hero removes .pinned and it re-docks to the photo seamlessly.
-    if(ticker){
-      let pinned = false;
-      function updateTickerDock(){
+    //
+    // On mobile, the outer page only starts scrolling at all once the
+    // visitor has scrolled .hero-mobile's own inner snap-scroll container
+    // all the way through its 3 slides (that's normal nested-scroll
+    // behavior), so window.scrollY > 0 reliably means "currently below the
+    // hero" here -- the same signal doubles as the trigger for resetting
+    // the inner slide position back to slide 1 the moment the visitor
+    // scrolls back up past that point, so re-entering the hero always
+    // starts fresh at the top instead of wherever it was left mid-scroll.
+    if(ticker || heroMobile){
+      let belowHero = false;
+      function updateHeroScrollState(){
         const rect = hero.getBoundingClientRect();
         const shouldPin = rect.bottom <= 0;
-        if(shouldPin !== pinned){
-          pinned = shouldPin;
-          ticker.classList.toggle('pinned', pinned);
+        if(ticker && shouldPin !== belowHero){
+          ticker.classList.toggle('pinned', shouldPin);
         }
+        if(heroMobile && belowHero && !shouldPin){
+          // Just crossed back up from "below the hero" to "hero visible
+          // again" -- snap the inner mobile slide-scroller back to slide 1.
+          heroMobile.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        belowHero = shouldPin;
       }
-      window.addEventListener('scroll', updateTickerDock, { passive: true });
-      window.addEventListener('resize', updateTickerDock);
-      updateTickerDock();
+      window.addEventListener('scroll', updateHeroScrollState, { passive: true });
+      window.addEventListener('resize', updateHeroScrollState);
+      updateHeroScrollState();
     }
   })();
 
@@ -1738,10 +1788,27 @@
     const root = document.documentElement;
     const toggle = document.getElementById('themeToggle');
     const icon = document.getElementById('themeToggleIcon');
-    // Note: the old masthead's #logoMasthead <img> was removed when the hero
-    // replaced that part of the header (the hero uses a text "12F" wordmark,
-    // not an image), so only the footer logo image still needs swapping here.
     const logoFooter = document.getElementById('logoFooter');
+    // The masthead's own adaptive wordmark -- separate from the hero's text
+    // "12F" (which is always white by design and never reacts to the
+    // toggle) but using the EXACT SAME pair of official logo files as
+    // logoFooter just below (12f-logo-light.png / 12f-logo-dark.png), so
+    // the whole page swaps in sync with one consistent set of assets: the
+    // solid black mark on the light theme, the light-outline mark on the
+    // dark theme (a solid black mark would all but disappear against a
+    // dark background, so the outline variant is the one that actually
+    // reads there) -- with a brief opacity dip on swap so it doesn't pop.
+    const masthead12fLogo = document.getElementById('masthead12fLogo');
+    function setAdaptiveLogo(dark){
+      if(!masthead12fLogo) return;
+      const nextSrc = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      if(masthead12fLogo.getAttribute('src') === nextSrc) return;
+      masthead12fLogo.style.opacity = '0';
+      setTimeout(function(){
+        masthead12fLogo.src = nextSrc;
+        masthead12fLogo.style.opacity = '1';
+      }, 150);
+    }
     const themeColorMeta = document.getElementById('themeColorMeta');
     const MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
     const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>';
@@ -1762,6 +1829,7 @@
       const dark = theme === 'dark';
       root.dataset.theme = dark ? 'dark' : 'light';
       logoFooter.src = dark ? '12f-logo-dark.png' : '12f-logo-light.png';
+      setAdaptiveLogo(dark);
       icon.innerHTML = dark ? SUN : MOON;
       const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
       toggle.title = label;
