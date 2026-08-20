@@ -79,13 +79,15 @@ a{color:inherit; text-decoration:none;}
 .mono{font-family:'IBM Plex Mono', monospace;}
 .serif{font-family:'Newsreader', serif;}
 
-/* ---------- Ticker — shared building blocks for the live band ----------
-   The site's only live ticker is the one built into the bottom of the
-   hero (.hero-ticker, defined further down); these base .ticker-tag /
-   .ticker-dot / .ticker-track / .ticker-item rules supply its shared
-   layout (flex, gap, animation) and are then re-themed by the
-   .hero-ticker-scoped rules below. There is no longer a separate
-   always-on band at the top of the header. */
+/* ---------- Ticker — shared building blocks for the Live Feed ----------
+   The site's only live feed is .live-feed, defined further down -- it sits
+   directly below the hero (not inside it) on every breakpoint, docking to
+   the top of the viewport via position:sticky once a visitor scrolls past
+   it. These base .ticker-tag / .ticker-dot / .ticker-track / .ticker-item
+   rules supply its shared layout (flex, gap, animation) and are then
+   re-themed/scoped by the .live-feed rules below. There is no separate
+   always-on band inside the hero anymore, and no duplicate band at the top
+   of the header either. */
 .ticker-tag{
   flex:0 0 auto;
   display:flex;
@@ -652,17 +654,20 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    wordmark simply centered in the topbar (the theme toggle and search
    button that used to flank it here now live below the hero instead — see
    .masthead-utility further down — so the topbar is just the wordmark and
-   needs no special centering trick), a live band along the very bottom
-   edge (desktop AND mobile) with NO background of its own — it sits
-   directly on the photo so it always matches the hero image natively.
+   needs no special centering trick). The hero is a pure cinematic visual
+   now, full stop — no overlay, no ticker/live band, no per-photo
+   brightness/contrast-tracking logic sits on top of it. The Live Feed
+   (.live-feed, defined further down) lives directly below the hero instead,
+   as its own sibling element, and docks to the top of the viewport via
+   position:sticky once a visitor scrolls into the main site feed.
    The hero's photo/headline/logo chrome stays always-dark (white text over
    photo) regardless of the site-wide light/dark toggle — same precedent as
-   the ticker/cover-art above, so hardcoded white/rgba colors are used here
-   on purpose instead of the theme custom properties. Since the toggle now
-   lives outside the hero entirely (below it, in .masthead-utility), this
-   is automatically true rather than something that has to be specially
-   guarded against — there's no theme-aware element inside .a24-hero left
-   to accidentally react to the toggle.
+   the ticker/cover-art elsewhere on the site, so hardcoded white/rgba
+   colors are used here on purpose instead of the theme custom properties.
+   Since the toggle lives outside the hero entirely (below it, in
+   .masthead-utility), this is automatically true rather than something
+   that has to be specially guarded against — there's no theme-aware
+   element inside .a24-hero left to accidentally react to the toggle.
    Darkening over the photo is a single FLAT, uniform tint (.hero-scrim) —
    no gradient anywhere in the hero, so there's never a visible fade or
    band from top to bottom or edge to edge, just a consistent cinematic
@@ -672,23 +677,18 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    stay crisp and sharp-edged rather than looking hazy/glowing; the grain
    and tint only ever touch the photo behind the text, never the text
    itself (text paints in a later, higher stacking layer than the scrim).
-   The live band is the one exception that IS adaptive: it has no
-   background of its own at all — not flat, not gradient — it sits
-   directly on the raw photo, and its text auto-swaps between white and
-   black depending on the live-measured brightness of the photo behind it
-   (see .hero-ticker.light-bg and the contrast-detection script in
-   index.html), with its own text-shadow halo for legibility instead of
-   any tinted box.
-   MOBILE (<=900px) swaps to a completely different presentation: a
-   vertical snap-scroll of exactly 3 full-height slides, one per headline
-   (see .hero-mobile / .hero-mslide below), built client-side from this
-   same server-rendered bg-layer/hero-title-item data — refresh.py and the
-   AUTO:HERO_* markers stay the single source of truth; index.html's hero
-   script just reshapes that same data into slides for narrow viewports.
-   The topbar (logo/icons) and live band stay pinned in place across all 3
-   slides (they're siblings positioned over the scroll container, not
-   inside it), and a minimal "N | total" counter bottom-right tracks the
-   current slide as the visitor scrolls.
+   MOBILE (<=900px) swaps to a completely different presentation: a custom
+   touch-driven slider of exactly 3 full-height slides, one per headline
+   (see .hero-mobile / .hero-mobile-track / .hero-mslide below), built
+   client-side from this same server-rendered bg-layer/hero-title-item data
+   — refresh.py and the AUTO:HERO_* markers stay the single source of
+   truth; index.html's hero script just reshapes that same data into
+   slides for narrow viewports, and drives the slide-to-slide transitions
+   with a JS-animated transform rather than native scrolling (see the
+   touchstart/touchend handling in index.html). The topbar (logo/icons)
+   stays pinned in place across all 3 slides (it's a sibling positioned
+   over the slider, not inside it), and a minimal "N | total" counter
+   bottom-right tracks the current slide as the visitor swipes.
    Populated server-side by refresh.py between the AUTO:HERO_* markers in
    index.html; updates automatically every hour. */
 .a24-hero{
@@ -719,10 +719,9 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    never shows a visible fade/banding from top to bottom or edge to edge.
    Same intensity everywhere, like a color-graded movie still, plus a very
    faint grain texture for a filmic (not flat-digital) feel. Legibility for
-   the headline stack, the live band, and the topbar logo comes from
-   text-shadow/drop-shadow halos on each of those elements individually
-   (see .hero-title-item, .hero-ticker, .hero-logo-mark below) rather than
-   from any extra darkening here. */
+   the headline stack and the topbar logo comes from text-shadow/drop-shadow
+   halos on each of those elements individually (see .hero-title-item and
+   .hero-logo-mark below) rather than from any extra darkening here. */
 .hero-scrim{
   position:absolute; inset:0;
   background-color:rgba(9,10,15,0.34);
@@ -770,7 +769,11 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 }
 
 .hero-body{
-  position:absolute; z-index:5; left:0; right:0; bottom:46px;
+  /* Used to reserve extra bottom clearance for the live band that lived
+     inside the hero; now that it's relocated below the hero entirely (see
+     .live-feed further down), this just needs its own comfortable margin
+     off the bottom edge. */
+  position:absolute; z-index:5; left:0; right:0; bottom:36px;
   display:flex; align-items:flex-end; justify-content:flex-start;
   padding:0 clamp(16px,4vw,40px);
 }
@@ -810,101 +813,55 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    is currently showing is the primary cue for which headline is "active". */
 .hero-title-item.active .ht-tag, .hero-title-item:hover .ht-tag{color:#F5F4EF;}
 
-/* Live band, built directly into the hero photo -- it has NO background of
-   its own (no box, no tint) so it always matches whatever the current hero
-   image looks like natively. Runs along the very bottom edge of the hero,
-   below the headline stack, on desktop AND mobile. Reuses the .ticker-tag /
-   .ticker-dot / .ticker-track / .ticker-item styles above, scoped and
-   re-themed for sitting straight on a photo. Default assumes a dark photo
-   (white text with a soft dark halo for legibility); the .light-bg
-   modifier (toggled by JS once it's measured the current photo's
-   brightness) flips the text to black with a soft light halo instead, so
-   it stays readable over a light or white photo too -- contrast comes
-   entirely from the text itself, never from a background tint. */
-.hero-ticker{
-  position:absolute; z-index:5; left:0; right:0; bottom:0;
+/* Live Feed -- lives directly below the hero (not inside it) on both mobile
+   and desktop, so the hero itself stays a pure cinematic visual with no
+   overlay, tint, or per-photo brightness/contrast-tracking logic on top of
+   it (that whole mechanism has been removed entirely along with this
+   element's old home inside .a24-hero). Docks to the top of the viewport
+   via native position:sticky the moment a visitor scrolls down into the
+   main site feed, with a fully opaque theme-matched background (solid
+   white in light mode, solid near-black in dark mode via var(--bg)) rather
+   than the old semi-transparent panel that used to sit directly on the
+   hero photo -- sticky needs an opaque background to actually read as
+   "docked" instead of letting content behind it show through. Because it
+   sits in normal document flow immediately after the hero (a sibling, not
+   a child), CSS's own sticky behavior means it can never ride up over the
+   hero when scrolling back toward the top: once the page scrolls back up
+   past the live feed's natural position, it simply un-sticks and continues
+   scrolling with the rest of the page -- no scroll-tracking JS needed to
+   enforce that boundary. Reuses the .ticker-tag / .ticker-dot /
+   .ticker-track / .ticker-item styles above (already theme-aware via CSS
+   custom properties), just scoped here for the sticky bar's own layout. */
+.live-feed{
+  position:sticky; top:0; z-index:60;
   display:flex; align-items:center;
-  height:38px;
-  padding:0 clamp(16px,4vw,40px);
+  height:42px;
+  padding:0 clamp(16px,4vw,40px) 0 0;
   overflow:hidden;
   white-space:nowrap;
-  background:none;
-}
-.hero-ticker .ticker-tag{
-  padding:0 12px 0 0; background:none; border-right:1px solid rgba(255,255,255,0.3);
-  color:#FF6B6B; margin-right:12px;
-  text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 9px rgba(0,0,0,0.55);
-  transition:border-color .35s ease, color .35s ease, text-shadow .35s ease;
-}
-.hero-ticker .ticker-track{padding-left:0; gap:40px;}
-.hero-ticker .ticker-item{
-  color:rgba(245,244,237,0.9); font-size:12px;
-  text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 9px rgba(0,0,0,0.55);
-  transition:color .35s ease, text-shadow .35s ease;
-}
-.hero-ticker .ticker-item b{color:#FFFFFF; text-shadow:inherit;}
-.hero-ticker .ticker-item .src{color:rgba(245,244,237,0.65); text-shadow:inherit;}
-.hero-ticker .ticker-item:hover{color:#FFFFFF;}
-
-.hero-ticker.light-bg .ticker-tag{
-  color:#C4302B; border-right-color:rgba(20,20,20,0.3);
-  text-shadow:0 1px 3px rgba(255,255,255,0.9), 0 0 9px rgba(255,255,255,0.6);
-}
-.hero-ticker.light-bg .ticker-item{
-  color:rgba(20,20,20,0.88);
-  text-shadow:0 1px 3px rgba(255,255,255,0.9), 0 0 9px rgba(255,255,255,0.6);
-}
-.hero-ticker.light-bg .ticker-item b{color:#0A0A0A; text-shadow:inherit;}
-.hero-ticker.light-bg .ticker-item .src{color:rgba(20,20,20,0.62); text-shadow:inherit;}
-.hero-ticker.light-bg .ticker-item:hover{color:#0A0A0A;}
-
-/* Once the user scrolls past the hero (desktop and mobile alike), the SAME
-   live-band element un-docks from the bottom of the hero photo and re-docks
-   as a sticky bar pinned to the very top of the viewport -- toggled via the
-   .pinned class (see the scroll-tracking script further down). Unlike the
-   docked-on-a-photo state above (which needs the brightness-driven
-   .light-bg swap for legibility), the pinned bar sits on the plain site
-   background, so its colors just follow the normal light/dark theme
-   variables and invert automatically with the theme toggle -- no
-   brightness detection needed here. These rules are placed after the
-   .light-bg rules above so they win by source order if .light-bg happens
-   to still be set from whichever hero photo was last active. */
-.hero-ticker.pinned{
-  position:fixed; z-index:80; top:0; left:0; right:0; bottom:auto;
-  height:42px;
-  background:var(--bg-elev);
+  background:var(--bg);
   border-bottom:1px solid var(--border-strong);
   box-shadow:0 12px 24px -12px rgba(var(--shadow-rgb),0.35);
-  transition:background-color .25s ease, border-color .25s ease;
 }
-.hero-ticker.pinned .ticker-tag{
-  color:var(--live); border-right-color:var(--border-strong); text-shadow:none;
-}
-.hero-ticker.pinned .ticker-item{color:var(--text-dim); text-shadow:none;}
-.hero-ticker.pinned .ticker-item b{color:var(--text); text-shadow:none;}
-.hero-ticker.pinned .ticker-item .src{color:var(--text-faint); text-shadow:none;}
-.hero-ticker.pinned .ticker-item:hover{color:var(--accent);}
+.live-feed .ticker-item:hover{color:var(--accent);}
 
-/* Pause the live band's horizontal scroll the moment a visitor is actually
+/* Pause the live feed's horizontal scroll the moment a visitor is actually
    reading it -- mouse hover on desktop (:hover), and press-and-hold on
    touch (the `.ticker-touching` class, toggled by Pointer Event listeners
    in the hero script since touch devices don't get a real, sustained
    :hover from a press-and-hold). Resuming is just removing whichever
    state applied -- animation-play-state:paused freezes a CSS animation at
    its exact current position, so play picks back up seamlessly with no JS
-   position-tracking needed. Applies identically whether the band is
-   currently docked on the hero photo or pinned to the top of the
-   viewport. */
-.hero-ticker:hover .ticker-track,
-.hero-ticker.ticker-touching .ticker-track{
+   position-tracking needed. */
+.live-feed:hover .ticker-track,
+.live-feed.ticker-touching .ticker-track{
   animation-play-state:paused;
 }
 
 @media (max-width:900px){
-  .hero-ticker{height:32px; padding:0 16px;}
-  .hero-ticker .ticker-item{font-size:11px;}
-  .hero-ticker .ticker-item .src{display:none;}
-  .hero-ticker.pinned{height:38px;}
+  .live-feed{height:38px;}
+  .live-feed .ticker-item{font-size:11px;}
+  .live-feed .ticker-item .src{display:none;}
 }
 
 /* ---------- Mobile hero: vertical snap-scroll, 1 headline per slide ----------
@@ -933,48 +890,38 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      max()) so the wordmark stays clear of the OS chrome while the photo
      behind it still extends all the way to the true top edge. */
   .hero-topbar{padding-top:max(20px, env(safe-area-inset-top));}
+  /* Viewport isolation: strictly clipped to the dynamic viewport (100dvh,
+     with the 100vh fallback already set on .a24-hero above) with hidden
+     overflow, so nothing from the main site (date line, filter pills, etc.)
+     can ever peek through at the bottom edge or behind a dynamic browser
+     URL bar. Slide navigation is driven entirely by JS (see the
+     touchstart/touchend handling + .hero-mobile-track transform in
+     index.html) rather than native scrolling, so this container itself
+     never scrolls -- overflow:hidden is permanent, not a snap-scroll area
+     anymore. touch-action:none stops the browser's own default touch
+     handling (panning/pull-to-refresh) on the slider itself, matching the
+     body-level lock the script applies while a visitor is still on slide 1
+     or 2. */
   .hero-mobile{
     position:absolute; inset:0; z-index:1;
-    overflow-y:auto; overflow-x:hidden;
-    scroll-snap-type:y mandatory;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
+    overflow:hidden;
+    touch-action:none;
   }
-  .hero-mobile::-webkit-scrollbar{display:none;}
-  /* Turns snapping off entirely once the hero script (see setMobileActive()
-     further down) reports the visitor has arrived at the second-to-last
-     slide. This is a whole-container toggle rather than just dropping
-     scroll-snap-align on the last slide alone -- that CSS-only approach was
-     tried and verified broken: with `mandatory` still active and the last
-     slide no longer a valid snap target, both scrollTo() and direct
-     scrollTop writes aimed at it were silently corrected straight back to
-     the second-to-last slide's snap point instead of landing there, which
-     would have trapped a real visitor exactly like the resistance this is
-     supposed to fix. Releasing the whole container once a visitor has
-     ALREADY firmly landed on the second-to-last slide sidesteps that dead
-     zone completely -- there's no lingering snap point left to correct
-     back to once they start scrolling onward from there. Slides 1 and 2
-     both still snap firmly getting there; this only changes what happens
-     once a visitor is done with slide 2 and moving past it. */
-  .hero-mobile.snap-released{
-    scroll-snap-type:none;
+  /* Built client-side (see index.html): holds all 3 .hero-mslide elements
+     stacked vertically, sized to total*100% of .hero-mobile's own height,
+     and translated via `transform:translateY()` to bring the active slide
+     into view -- see goTo() in index.html. The transition here is what
+     makes slide 1<->2 swipes glide instead of jump; goTo() temporarily
+     disables it for the instant reset back to slide 1 on hero re-entry. */
+  .hero-mobile-track{
+    position:relative;
+    width:100%;
+    transition:transform .38s cubic-bezier(.4,0,.2,1);
+    will-change:transform;
   }
   .hero-mslide{
     position:relative;
-    width:100%; height:100%;
-    scroll-snap-align:start;
-    /* scroll-snap-stop:always (the previous value) forces the browser to
-       land on every single slide even during a fast fling, which eats the
-       momentum of a quick swipe and means a visitor trying to blow past
-       slide 3 into the rest of the site gets stopped dead on it instead --
-       exactly the "trapped"/stiff feeling this fixes. :normal still snaps
-       cleanly slide-to-slide on an ordinary scroll, it just no longer
-       fights a fast gesture that's clearly headed further than one slide.
-       Every slide (including the last) keeps scroll-snap-align:start --
-       see .hero-mobile.snap-released above for why the last slide is
-       instead released by turning off snapping for the whole container,
-       not by dropping this on an individual slide. */
-    scroll-snap-stop:normal;
+    width:100%;
   }
   .mslide-bg{
     position:absolute; inset:0;
