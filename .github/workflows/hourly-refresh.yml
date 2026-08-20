@@ -1,37 +1,33 @@
 name: Hourly news refresh
-
 on:
   schedule:
     # Runs at the top of every hour (UTC). GitHub may delay a few minutes
     # under load, which is expected and fine for an hourly refresh.
     - cron: "0 * * * *"
   workflow_dispatch: {}
-
 permissions:
   contents: write
-
 concurrency:
   group: hourly-refresh
   cancel-in-progress: false
-
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
       - name: Check out site
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: pip install -r scripts/requirements.txt
-
       - name: Fetch news and rewrite index.html
+        env:
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         run: python scripts/fetch_news.py
-
       - name: Commit and push if changed
         run: |
           git config user.name "12F Automation"
