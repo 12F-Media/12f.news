@@ -135,14 +135,22 @@ a{color:inherit; text-decoration:none;}
   .masthead-utility .utility-right{gap:10px;}
 }
 
-.masthead-logo{text-align:center; padding:26px 16px 22px;}
+/* This is the secondary, small "main site" wordmark that lives in the
+   flow just below the hero (the hero itself is the primary, full-size
+   "12F" brand moment now, so this one stays modest -- a slim divider
+   between the utility row and the nav rule, not a second hero logo). It's
+   theme-adaptive: see #masthead12fLogo's default src in the markup plus
+   setAdaptiveLogo() in the theme-toggle script, which swaps between the
+   solid-dark (3.png) and light-outline (2.png) glitch marks and crossfades
+   the change so it never pops. */
+.masthead-logo{text-align:center; padding:10px 16px;}
 .masthead-logo img{
-  height:112px; width:auto; margin:0 auto; display:inline-block;
-  filter:drop-shadow(0 0 34px rgba(var(--accent-rgb),0.18));
+  height:26px; width:auto; margin:0 auto; display:inline-block;
+  transition:opacity .15s ease;
 }
 @media (max-width:840px){
-  .masthead-logo{padding:20px 16px 16px;}
-  .masthead-logo img{height:74px;}
+  .masthead-logo{padding:8px 16px;}
+  .masthead-logo img{height:22px;}
 }
 
 .masthead-rule{
@@ -862,6 +870,21 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 .hero-ticker.pinned .ticker-item .src{color:var(--text-faint); text-shadow:none;}
 .hero-ticker.pinned .ticker-item:hover{color:var(--accent);}
 
+/* Pause the live band's horizontal scroll the moment a visitor is actually
+   reading it -- mouse hover on desktop (:hover), and press-and-hold on
+   touch (the `.ticker-touching` class, toggled by Pointer Event listeners
+   in the hero script since touch devices don't get a real, sustained
+   :hover from a press-and-hold). Resuming is just removing whichever
+   state applied -- animation-play-state:paused freezes a CSS animation at
+   its exact current position, so play picks back up seamlessly with no JS
+   position-tracking needed. Applies identically whether the band is
+   currently docked on the hero photo or pinned to the top of the
+   viewport. */
+.hero-ticker:hover .ticker-track,
+.hero-ticker.ticker-touching .ticker-track{
+  animation-play-state:paused;
+}
+
 @media (max-width:900px){
   .hero-ticker{height:32px; padding:0 16px;}
   .hero-ticker .ticker-item{font-size:11px;}
@@ -884,6 +907,17 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    right, updated as each slide crosses into view. */
 @media (max-width:900px){
   .hero-bg, .hero-scrim, .hero-body{display:none;}
+  /* Edge-to-edge mobile hero: the section already fills the full dynamic
+     viewport (100dvh, set on .a24-hero above) including the area behind the
+     status bar/notch/dynamic island, since nothing reserves space for it by
+     default. That's the "edge-to-edge" look, but it also means the centered
+     "12F" wordmark in .hero-topbar would otherwise sit right under the
+     status bar on notched phones. Pad the topbar down by the device's safe
+     area inset (falls back to 0 on non-notched devices/older browsers,
+     leaving the original 20px vertical padding as the effective minimum via
+     max()) so the wordmark stays clear of the OS chrome while the photo
+     behind it still extends all the way to the true top edge. */
+  .hero-topbar{padding-top:max(20px, env(safe-area-inset-top));}
   .hero-mobile{
     position:absolute; inset:0; z-index:1;
     overflow-y:auto; overflow-x:hidden;
@@ -896,7 +930,14 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
     position:relative;
     width:100%; height:100%;
     scroll-snap-align:start;
-    scroll-snap-stop:always;
+    /* scroll-snap-stop:always (the previous value) forces the browser to
+       land on every single slide even during a fast fling, which eats the
+       momentum of a quick swipe and means a visitor trying to blow past
+       slide 3 into the rest of the site gets stopped dead on it instead --
+       exactly the "trapped"/stiff feeling this fixes. :normal still snaps
+       cleanly slide-to-slide on an ordinary scroll, it just no longer
+       fights a fast gesture that's clearly headed further than one slide. */
+    scroll-snap-stop:normal;
   }
   .mslide-bg{
     position:absolute; inset:0;
