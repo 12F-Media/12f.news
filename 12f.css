@@ -752,13 +752,21 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    colors, mirroring exactly how the text version it replaces always
    stayed plain white -- the two-layer drop-shadow (the img equivalent of
    the old text-shadow) is what keeps it legible over any photo instead of
-   swapping variants. */
+   swapping variants. Sized against A24's own site as a reference point (a
+   centered top-nav wordmark is the same layout pattern) -- their logo runs
+   noticeably bigger on desktop relative to mobile than a single fixed size
+   here could match, so this splits into its own two sizes at the same
+   900px breakpoint the rest of the hero already switches on, rather than
+   one flat value for both. */
 .hero-logo-mark{
-  height:30px; width:auto;
+  height:32px; width:auto; max-width:160px;
   filter:
     drop-shadow(0 1px 3px rgba(0,0,0,0.8))
     drop-shadow(0 2px 12px rgba(0,0,0,0.55));
   pointer-events:none;
+}
+@media (max-width:900px){
+  .hero-logo-mark{height:18px; max-width:110px;}
 }
 
 .hero-body{
