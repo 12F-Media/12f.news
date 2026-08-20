@@ -750,10 +750,11 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    centered 12F wordmark now, so a simple center alignment is all it needs. */
 .hero-topbar{
   position:absolute; top:0; left:0; right:0;
-  /* Simply needs to stay above .hero-mobile's own z-index:1 (and its
-     scrolled-through slide content) so the logo stays visibly pinned on
-     top across every slide on mobile. Same reasoning applies to
-     .hero-mobile-counter below. */
+  /* z-index:1000 -- must stay above .hero-mobile.viewport-locked's
+     z-index:999 (that element switches to position:fixed while pinned on
+     mobile slides 1-2), otherwise the fixed slider fully covers this
+     topbar and the logo disappears on exactly those two slides. Same
+     reasoning applies to .hero-mobile-counter below. */
   z-index:1000;
   display:flex; align-items:center; justify-content:center;
   /* Top padding set to 64px on desktop (see the max-width:900px override
@@ -925,60 +926,68 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      a 1260px-wide mobile screenshot (~7.4% of viewport width), scaled to a
      390px-wide mobile viewport to match A24's spacing. */
   .hero-topbar{padding-top:max(30px, env(safe-area-inset-top));}
-  /* Real, native scroll-snap container -- NOT a JS-simulated slider. An
-     earlier version of this drove slide changes with touchstart/touchmove/
-     touchend distance math plus a document.body scroll-lock (position:fixed
-     + overflow:hidden + touch-action:none, toggled by JS), which reliably
-     broke on real iOS Safari/Arc/Android Chrome: those browsers scroll on a
-     compositor thread that can commit a scroll/rubber-band gesture from the
-     very first touchmove before a non-passive JS listener's preventDefault()
-     call even runs, especially on a fast flick -- there's no way to fully
-     win that race from JS. Native CSS scroll-snap sidesteps it entirely by
-     using the browser's own scrolling/snapping instead of faking it, which
-     is also what a production site like A24's own mobile site relies on for
-     this same "swipe through full-bleed sections" pattern.
-     overscroll-behavior-y:contain (permanent baseline) stops a swipe that
-     runs out of slides to snap to from leaking into the page underneath
-     while still on slides 1/2; the .at-last-slide override below switches
-     that back to auto once the last slide is reached, so the *next* swipe
-     hands off to native page scroll with zero resistance (see the
-     onHeroScroll() toggle in index.html). scrollbar-width/::-webkit-
-     scrollbar hide the native scrollbar since this reads as a slider, not a
-     literal scrollable list. */
+  /* Viewport isolation: strictly clipped to the dynamic viewport (100dvh,
+     with the 100vh fallback already set on .a24-hero above) with hidden
+     overflow, so nothing from the main site (date line, filter pills, etc.)
+     can ever peek through at the bottom edge or behind a dynamic browser
+     URL bar. Slide navigation is driven entirely by JS (see the
+     touchstart/touchend handling + .hero-mobile-track transform in
+     index.html) rather than native scrolling, so this container itself
+     never scrolls -- overflow:hidden is permanent, not a snap-scroll area
+     anymore. touch-action is intentionally left at its default (auto) here
+     -- NOT none -- because this base rule is also what's in effect once
+     slide 3 releases (see .viewport-locked below); a permanent
+     touch-action:none here was the bug that left slide 3 visitors unable
+     to scroll at all on a real device, since touch-action is read by the
+     browser the instant a touch begins, before any JS runs, regardless of
+     what the lock state actually is. */
   .hero-mobile{
     position:absolute; inset:0; z-index:1;
-    overflow-y:scroll; overflow-x:hidden;
-    scroll-snap-type:y mandatory;
-    -webkit-overflow-scrolling:touch;
-    overscroll-behavior-y:contain;
-    scrollbar-width:none;
+    overflow:hidden;
   }
-  .hero-mobile::-webkit-scrollbar{display:none;}
-  .hero-mobile.at-last-slide{overscroll-behavior-y:auto;}
+  /* Two things bundled into one class, both only while a visitor is still
+     on slide 1 or 2 (toggled by lockBody()/goTo() in index.html):
+     1) touch-action:none -- stops the browser's own native panning on the
+        slider so a swipe can only ever change slides, never scroll the
+        page underneath (this MUST be conditional, not a permanent rule on
+        .hero-mobile above -- see that rule's comment for why).
+     2) position:fixed, pinned directly to the visual viewport -- a real
+        Mobile Safari quirk means 100dvh alone isn't quite enough: Safari
+        recalculates dvh live as its address bar collapses/expands on
+        scroll/touch, and during that recalculation a normal in-flow
+        element can momentarily fall short of the true visual viewport,
+        exposing a sliver of whatever sits below the hero (the Live Feed)
+        at the bottom edge. Taking the slider fully out of document flow
+        and pinning it to the viewport sidesteps that recalculation
+        entirely. Reverts to the plain in-flow, auto-touch-action
+        .hero-mobile rule above the instant slide 3 releases, so the page
+        can both scroll AND be swiped away normally from there. */
+  .hero-mobile.viewport-locked{
+    position:fixed;
+    top:0; left:0;
+    width:100vw;
+    height:100dvh;
+    height:-webkit-fill-available;
+    min-height:-webkit-fill-available;
+    overflow:hidden;
+    touch-action:none;
+    z-index:999;
+  }
   /* Built client-side (see index.html): holds all 3 .hero-mslide elements
-     stacked vertically in normal flow -- no transform, no JS-driven
-     positioning. Each slide's own height (below) is what defines the native
-     scroll-snap stop points. */
+     stacked vertically, sized to total*100% of .hero-mobile's own height,
+     and translated via `transform:translateY()` to bring the active slide
+     into view -- see goTo() in index.html. The transition here is what
+     makes slide 1<->2 swipes glide instead of jump; goTo() temporarily
+     disables it for the instant reset back to slide 1 on hero re-entry. */
   .hero-mobile-track{
     position:relative;
     width:100%;
+    transition:transform .38s cubic-bezier(.4,0,.2,1);
+    will-change:transform;
   }
   .hero-mslide{
     position:relative;
     width:100%;
-    /* Explicit height (not 100%) since .hero-mobile-track is a plain
-       auto-height block -- a percentage height here wouldn't resolve
-       against it. Matches .a24-hero's own 100vh/100dvh fallback pairing
-       so each slide is exactly one "page" of the scroll-snap container --
-       deliberately NOT -webkit-fill-available here (unlike the old
-       position:fixed .viewport-locked rule this replaces): that value
-       needs a definite containing block to resolve against and computes
-       to 0 for a plain in-flow block like this one. scroll-snap-align:start
-       is what makes this a snap stop. */
-    height:100vh;
-    height:100dvh;
-    scroll-snap-align:start;
-    scroll-snap-stop:always;
   }
   .mslide-bg{
     position:absolute; inset:0;
