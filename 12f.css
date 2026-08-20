@@ -747,7 +747,13 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    and never the hero's own always-dark chrome. The topbar is just the
    centered 12F wordmark now, so a simple center alignment is all it needs. */
 .hero-topbar{
-  position:absolute; top:0; left:0; right:0; z-index:5;
+  position:absolute; top:0; left:0; right:0;
+  /* z-index:1000 -- must stay above .hero-mobile.viewport-locked's
+     z-index:999 (that element switches to position:fixed while pinned on
+     mobile slides 1-2), otherwise the fixed slider fully covers this
+     topbar and the logo disappears on exactly those two slides. Same
+     reasoning applies to .hero-mobile-counter below. */
+  z-index:1000;
   display:flex; align-items:center; justify-content:center;
   /* Top padding set to 64px on desktop (see the max-width:900px override
      further down for the 24px mobile value), measured directly off a24.com's
@@ -911,10 +917,13 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      "12F" wordmark in .hero-topbar would otherwise sit right under the
      status bar on notched phones. Pad the topbar down by the device's safe
      area inset (falls back to 0 on non-notched devices/older browsers,
-     leaving 24px as the effective minimum via max()) so the wordmark stays
+     leaving 30px as the effective minimum via max()) so the wordmark stays
      clear of the OS chrome while the photo behind it still extends all the
-     way to the true top edge. */
-  .hero-topbar{padding-top:max(24px, env(safe-area-inset-top));}
+     way to the true top edge. The 30px floor (up from 24px) was measured off
+     A24's own mobile nav row: page-top-to-MENU-icon gap came out to ~93px in
+     a 1260px-wide mobile screenshot (~7.4% of viewport width), scaled to a
+     390px-wide mobile viewport to match A24's spacing. */
+  .hero-topbar{padding-top:max(30px, env(safe-area-inset-top));}
   /* Viewport isolation: strictly clipped to the dynamic viewport (100dvh,
      with the 100vh fallback already set on .a24-hero above) with hidden
      overflow, so nothing from the main site (date line, filter pills, etc.)
@@ -1015,7 +1024,7 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
     text-shadow:0 1px 2px rgba(0,0,0,0.85);
   }
   .hero-mobile-counter{
-    position:absolute; right:16px; bottom:44px; z-index:5;
+    position:absolute; right:16px; bottom:44px; z-index:1000;
     display:flex; flex-direction:column; align-items:center; gap:6px;
     font-size:11px; color:rgba(245,244,237,0.85);
     text-shadow:0 1px 2px rgba(0,0,0,0.85);
