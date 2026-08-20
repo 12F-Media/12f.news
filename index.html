@@ -1261,16 +1261,35 @@
     function isMobileHero(){
       return window.matchMedia('(max-width:900px)').matches;
     }
+    // Freezes the page AND takes the slider fully out of document flow
+    // (see .hero-mobile.viewport-locked in 12f.css) while a visitor is on
+    // slide 1 or 2. Both halves matter on iOS Safari specifically: the
+    // body freeze alone stops the page from actually scrolling, but
+    // Safari can still momentarily recompute 100dvh as its address bar
+    // collapses/expands from the touch gesture, which can let a sliver of
+    // whatever sits below the hero peek through at the bottom edge for a
+    // frame. Pinning the slider with position:fixed makes it immune to
+    // that recalculation entirely, independent of the body-level lock.
     function lockBody(){
       if(bodyLocked) return;
+      document.body.style.position = 'fixed';
+      document.body.style.top = '0';
+      document.body.style.left = '0';
+      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       document.body.style.touchAction = 'none';
+      if(heroMobile) heroMobile.classList.add('viewport-locked');
       bodyLocked = true;
     }
     function unlockBody(){
       if(!bodyLocked) return;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.width = '';
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
+      if(heroMobile) heroMobile.classList.remove('viewport-locked');
       bodyLocked = false;
     }
     function setCounter(n){
@@ -1347,18 +1366,27 @@
         setCounter(1);
         if(isMobileHero()) lockBody();
 
-        // ---------- Swipe navigation (touchstart/touchend only, not
-        // touchmove) -- only intercepted while still locked into the
-        // slider (slides 1/2). Once released on the last slide, we stop
-        // intercepting touch entirely so native scroll takes over cleanly;
-        // getting back to slide 1 from there happens via the window-scroll
-        // "returned to the very top" check below instead. ----------
+        // ---------- Swipe navigation -- touchstart/touchend decide
+        // whether a swipe advances or reverses the slide (see goTo()
+        // below); touchmove's only job is calling preventDefault() while
+        // still locked into the slider (slides 1/2) so the gesture can't
+        // also drag the native page underneath -- both need
+        // {passive:false} since preventDefault() is a silent no-op on a
+        // passive listener. Once released on the last slide, bodyLocked
+        // is false so touchmove stops intercepting and the same gesture
+        // scrolls the page natively instead; getting back to slide 1 from
+        // there happens via the window-scroll "returned to the very top"
+        // check below. ----------
         let touchStartY = null;
         const SWIPE_THRESHOLD = 40;
         heroMobile.addEventListener('touchstart', function(e){
           if(!isMobileHero() || !bodyLocked || !e.touches.length) return;
           touchStartY = e.touches[0].clientY;
-        }, { passive: true });
+        }, { passive: false });
+        heroMobile.addEventListener('touchmove', function(e){
+          if(!isMobileHero() || !bodyLocked) return;
+          e.preventDefault();
+        }, { passive: false });
         heroMobile.addEventListener('touchend', function(e){
           if(!isMobileHero() || !bodyLocked || touchStartY === null) return;
           const touch = e.changedTouches && e.changedTouches[0];
