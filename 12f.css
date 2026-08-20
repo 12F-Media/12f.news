@@ -749,35 +749,47 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 .hero-topbar{
   position:absolute; top:0; left:0; right:0; z-index:5;
   display:flex; align-items:center; justify-content:center;
-  /* Top padding set to 28px on desktop (see the max-width:900px override
-     further down for the 20px mobile value) to match the logo's intended
+  /* Top padding set to 18px on desktop (see the max-width:900px override
+     further down for the 14px mobile value) to match the logo's intended
      vertical anchor precisely rather than sharing a flat value with the
      bottom/horizontal insets. */
-  padding:28px clamp(16px,4vw,40px) 20px;
+  padding:18px clamp(16px,4vw,40px) 20px;
 }
 /* The actual brand mark now lives here (top-center of the hero) instead of
    the plain typed "12F" text this used to be, and instead of the small
    adaptive wordmark that used to sit below the hero on the main site (see
-   the removed .masthead-logo). It stays a single fixed appearance (the
-   light-outline mark) regardless of theme or the current hero photo's own
-   colors, mirroring exactly how the text version it replaces always
-   stayed plain white -- the two-layer drop-shadow (the img equivalent of
-   the old text-shadow) is what keeps it legible over any photo instead of
-   swapping variants. Sized against A24's own site as a reference point (a
+   the removed .masthead-logo). It's its own dedicated asset --
+   12f-logo-mark.png, a plain solid-white "12F" wordmark cropped tight to
+   its own ink (not the two-tone 12f-logo-light.png/12f-logo-dark.png pair
+   used elsewhere on the site, e.g. the footer, which are intentionally
+   untouched here) -- and stays a single fixed appearance regardless of
+   theme or the current hero photo's own colors, mirroring exactly how the
+   text version it replaces always stayed plain white -- the two-layer
+   drop-shadow (the img equivalent of the old text-shadow) is what keeps
+   it legible over any photo instead of swapping variants. Sized against
+   A24's own site as a reference point (a
    centered top-nav wordmark is the same layout pattern) -- their logo runs
    noticeably bigger on desktop relative to mobile than a single fixed size
    here could match, so this splits into its own two sizes at the same
    900px breakpoint the rest of the hero already switches on, rather than
    one flat value for both. */
+/* Wraps the mark so it's a real clickable link back to the homepage
+   (see index.html) -- display:inline-flex keeps it hugging the image's
+   own box exactly (no extra inline-baseline whitespace) so it doesn't
+   throw off the topbar's centering. */
+.hero-logo-link{
+  display:inline-flex;
+}
+.hero-logo-link:hover .hero-logo-mark{opacity:0.82;}
 .hero-logo-mark{
-  height:24px; width:auto; max-width:160px;
+  height:36px; width:auto; max-width:240px;
   filter:
     drop-shadow(0 1px 3px rgba(0,0,0,0.8))
     drop-shadow(0 2px 12px rgba(0,0,0,0.55));
-  pointer-events:none;
+  transition:opacity .2s ease;
 }
 @media (max-width:900px){
-  .hero-logo-mark{height:20px; max-width:110px;}
+  .hero-logo-mark{height:30px; max-width:165px;}
 }
 
 .hero-body{
@@ -898,10 +910,10 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      "12F" wordmark in .hero-topbar would otherwise sit right under the
      status bar on notched phones. Pad the topbar down by the device's safe
      area inset (falls back to 0 on non-notched devices/older browsers,
-     leaving the original 20px vertical padding as the effective minimum via
-     max()) so the wordmark stays clear of the OS chrome while the photo
-     behind it still extends all the way to the true top edge. */
-  .hero-topbar{padding-top:max(20px, env(safe-area-inset-top));}
+     leaving 14px as the effective minimum via max()) so the wordmark stays
+     clear of the OS chrome while the photo behind it still extends all the
+     way to the true top edge. */
+  .hero-topbar{padding-top:max(14px, env(safe-area-inset-top));}
   /* Viewport isolation: strictly clipped to the dynamic viewport (100dvh,
      with the 100vh fallback already set on .a24-hero above) with hidden
      overflow, so nothing from the main site (date line, filter pills, etc.)
@@ -910,29 +922,34 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
      touchstart/touchend handling + .hero-mobile-track transform in
      index.html) rather than native scrolling, so this container itself
      never scrolls -- overflow:hidden is permanent, not a snap-scroll area
-     anymore. touch-action:none stops the browser's own default touch
-     handling (panning/pull-to-refresh) on the slider itself, matching the
-     body-level lock the script applies while a visitor is still on slide 1
-     or 2. */
+     anymore. touch-action is intentionally left at its default (auto) here
+     -- NOT none -- because this base rule is also what's in effect once
+     slide 3 releases (see .viewport-locked below); a permanent
+     touch-action:none here was the bug that left slide 3 visitors unable
+     to scroll at all on a real device, since touch-action is read by the
+     browser the instant a touch begins, before any JS runs, regardless of
+     what the lock state actually is. */
   .hero-mobile{
     position:absolute; inset:0; z-index:1;
     overflow:hidden;
-    touch-action:none;
   }
-  /* Belt-and-suspenders fix for a real Mobile Safari quirk: 100dvh on
-     .a24-hero (an in-flow, position:relative section) is usually enough,
-     but Safari recalculates dvh live as its address bar collapses/expands
-     on scroll/touch, and during that recalculation a normal in-flow
-     element can momentarily fall short of the true visual viewport,
-     exposing a sliver of whatever sits below the hero (the Live Feed) at
-     the bottom edge. Toggled on by the hero script (see
-     lockBody()/goTo() in index.html) for exactly as long as a visitor is
-     still on slide 1 or 2 -- the same window the body-level scroll lock
-     covers -- this takes the slider fully OUT of document flow and pins
-     it directly to the visual viewport instead, so it can't be affected
-     by the hero's own in-flow box being momentarily wrong. Reverts to the
-     plain in-flow .hero-mobile rule above the instant slide 3 releases,
-     so the page can scroll it away normally from there. */
+  /* Two things bundled into one class, both only while a visitor is still
+     on slide 1 or 2 (toggled by lockBody()/goTo() in index.html):
+     1) touch-action:none -- stops the browser's own native panning on the
+        slider so a swipe can only ever change slides, never scroll the
+        page underneath (this MUST be conditional, not a permanent rule on
+        .hero-mobile above -- see that rule's comment for why).
+     2) position:fixed, pinned directly to the visual viewport -- a real
+        Mobile Safari quirk means 100dvh alone isn't quite enough: Safari
+        recalculates dvh live as its address bar collapses/expands on
+        scroll/touch, and during that recalculation a normal in-flow
+        element can momentarily fall short of the true visual viewport,
+        exposing a sliver of whatever sits below the hero (the Live Feed)
+        at the bottom edge. Taking the slider fully out of document flow
+        and pinning it to the viewport sidesteps that recalculation
+        entirely. Reverts to the plain in-flow, auto-touch-action
+        .hero-mobile rule above the instant slide 3 releases, so the page
+        can both scroll AND be swiped away normally from there. */
   .hero-mobile.viewport-locked{
     position:fixed;
     top:0; left:0;
@@ -941,6 +958,7 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
     height:-webkit-fill-available;
     min-height:-webkit-fill-available;
     overflow:hidden;
+    touch-action:none;
     z-index:999;
   }
   /* Built client-side (see index.html): holds all 3 .hero-mslide elements
