@@ -19,6 +19,7 @@ import json
 import random
 import re
 import socket
+import struct
 import sys
 import unicodedata
 from datetime import datetime, timezone, timedelta
@@ -217,7 +218,7 @@ SOURCES = {
     },
 }
 
-BIAS_LABEL = {"bias-L": "Left", "bias-CL": "Lean Left", "bias-C": "Center", "bias-CR": "Lean Right", "bias-R": "Right"}
+BIAS_LABEL = {"bias-L": "Left", "bias-CL": "Leans Left", "bias-C": "Center", "bias-CR": "Leans Right", "bias-R": "Right"}
 CAT_KICKER = {
     "politics": "Politics", "markets": "Business", "world": "World", "tech": "Technology",
     "christian": "Faith", "sports": "Sports", "culture": "Culture",
@@ -645,14 +646,6 @@ def js_str(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
-def render_ticker_js(items):
-    lines = []
-    for i, item in enumerate(items):
-        tag = "BREAKING" if i == 0 else ""
-        lines.append(f'    [{js_str(tag)},{js_str(item["title"])},{js_str(item["source"])},{js_str(item["url"])}],')
-    return "  const headlines = [\n" + "\n".join(lines) + "\n  ];"
-
-
 def render_wire_js(items, now):
     lines = []
     for item in items:
@@ -722,6 +715,272 @@ def pick_with_image(pool, used):
     if fallback is not None:
         used.add(fallback["url"])
     return fallback
+
+
+def pick_photo_priority(pool, n, used):
+    """Like pick(pool, n, used), but fills the n slots with photo-bearing
+    candidates first (in pool order), only falling back to photo-less items
+    if the pool doesn't have enough images to go around. Used anywhere a
+    template renders an image box next to the headline (homepage sub-stories,
+    every category grid's cards) so those slots don't sit empty/blank just
+    because a photo-less item happened to be picked first -- not every
+    article needs a photo, but a slot that's designed to show one should
+    almost always get an article that actually has one."""
+    with_photo, without_photo = [], []
+    for item in pool:
+        if item["url"] in used:
+            continue
+        (with_photo if item["image"] else without_photo).append(item)
+
+    out = []
+    for item in with_photo:
+        if len(out) >= n:
+            break
+        out.append(item)
+        used.add(item["url"])
+    if len(out) < n:
+        for item in without_photo:
+            if len(out) >= n:
+                break
+            out.append(item)
+            used.add(item["url"])
+    return out
+
+
+def title_case(s):
+    """Capitalize the first letter of every word -- used only for the hero's
+    display headline; every other rendering of a story's title keeps its
+    original casing exactly as clean_text() produced it."""
+    return " ".join(w[:1].upper() + w[1:] if w else w for w in s.split(" "))
+
+
+# ---------------------------------------------------------------------------
+# Hero media quality guardrail
+# ---------------------------------------------------------------------------
+# The hero is the single largest, highest-visibility image on the page (a
+# full-bleed background behind the top headlines), so it holds every
+# candidate photo to a real bar instead of accepting whatever the smallest
+# RSS thumbnail happens to be. Every other image box on the site (lead
+# story, sub-stories, category cards) keeps using whatever thumbnail the
+# feed provides -- those render much smaller, so this stricter check is
+# hero-only, applied inside pick_hero() below.
+
+HERO_MIN_WIDTH = 640
+HERO_MIN_HEIGHT = 360
+HERO_MIN_ASPECT = 1.3  # landscape-ish -- roughly 4:3 or wider; excludes
+                       # portrait/square crops that would look zoomed-in
+                       # and cropped at full hero scale.
+HERO_MAX_PROBES_PER_RUN = 25  # hard cap on how many candidate images this
+                               # run will actually download to measure, so a
+                               # bad run (lots of low-quality candidates in a
+                               # row) can't stall the hourly refresh chasing
+                               # image dimensions the way a slow feed could.
+
+# Filename/path substrings that reliably indicate a generic fallback image
+# rather than a real photo -- sized/cropped article art almost never
+# contains any of these in its URL, but a site's own "no image available"
+# stand-in, a tracking pixel, or a bare logo/icon reliably does.
+_PLACEHOLDER_URL_HINTS = (
+    "placeholder", "default", "generic", "no-image", "noimage", "no_image",
+    "missing", "blank", "1x1", "pixel.gif", "pixel.png", "spacer", "sprite",
+    "fallback", "stub", "avatar", "favicon", "logo",
+)
+
+
+def looks_like_placeholder(url):
+    """True for anything that's clearly not a real article photo -- vector
+    icons/logos (.svg is never a news photo) and known generic-fallback
+    filename patterns."""
+    if not url:
+        return True
+    low = url.lower().split("?", 1)[0]
+    if low.endswith(".svg"):
+        return True
+    return any(hint in low for hint in _PLACEHOLDER_URL_HINTS)
+
+
+def _parse_image_dimensions(data):
+    """Reads (width, height) from a PNG/JPEG/GIF/WEBP image's own header
+    bytes, entirely by hand -- feedparser is this script's only third-party
+    dependency, and this keeps it that way rather than adding an imaging
+    library just to read a size header. Returns None for anything that
+    doesn't parse as a recognized, complete header (truncated download,
+    exotic format, etc.), which the caller treats as "couldn't verify" and
+    skips -- a hero slot only ever shows a photo this script actually
+    confirmed meets the bar."""
+    if not data:
+        return None
+    # PNG: 8-byte signature, then an IHDR chunk whose first 8 bytes of data
+    # are big-endian uint32 width/height.
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        if len(data) >= 24 and data[12:16] == b'IHDR':
+            return struct.unpack('>II', data[16:24])
+        return None
+    # GIF87a / GIF89a: 6-byte signature, then little-endian uint16 width/height.
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        if len(data) >= 10:
+            return struct.unpack('<HH', data[6:10])
+        return None
+    # JPEG: walk the marker segments looking for the first Start-Of-Frame
+    # marker, which carries a 1-byte precision field then big-endian uint16
+    # height, then width.
+    if data[:2] == b'\xff\xd8':
+        i, n = 2, len(data)
+        sof_markers = (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+                       0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF)
+        while i + 4 <= n:
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker == 0xFF:
+                i += 1
+                continue
+            if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg_len = struct.unpack('>H', data[i + 2:i + 4])[0]
+            if marker in sof_markers:
+                if i + 9 > n:
+                    return None  # header was cut off by our download cap
+                h, w = struct.unpack('>HH', data[i + 5:i + 9])
+                return w, h
+            i += 2 + seg_len
+        return None
+    # WEBP: RIFF container. VP8X carries an explicit canvas size; the
+    # simple VP8 (lossy) and VP8L (lossless) bitstreams each pack width/
+    # height into their own compact header layout.
+    if data[:4] == b'RIFF' and len(data) >= 16 and data[8:12] == b'WEBP':
+        chunk = data[12:16]
+        if chunk == b'VP8X' and len(data) >= 30:
+            w = 1 + (data[24] | (data[25] << 8) | (data[26] << 16))
+            h = 1 + (data[27] | (data[28] << 8) | (data[29] << 16))
+            return w, h
+        if chunk == b'VP8 ' and len(data) >= 30:
+            w = struct.unpack('<H', data[26:28])[0] & 0x3FFF
+            h = struct.unpack('<H', data[28:30])[0] & 0x3FFF
+            return w, h
+        if chunk == b'VP8L' and len(data) >= 25:
+            bits = struct.unpack('<I', data[21:25])[0]
+            w = (bits & 0x3FFF) + 1
+            h = ((bits >> 14) & 0x3FFF) + 1
+            return w, h
+        return None
+    return None
+
+
+def probe_image_dimensions(url, timeout=8, max_bytes=300_000):
+    """Downloads just enough of an image's bytes to read its dimensions from
+    the format's own header (see _parse_image_dimensions) -- never the whole
+    file -- so checking a hero candidate that turns out to be too small or
+    the wrong shape stays cheap. Returns None on any failure (network error,
+    unrecognized format, truncated header)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": UA,
+            "Range": f"bytes=0-{max_bytes - 1}",
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read(max_bytes)
+    except Exception:
+        return None
+    return _parse_image_dimensions(data)
+
+
+_hero_image_quality_cache = {}
+
+
+def hero_image_quality_ok(url, budget):
+    """Combines the placeholder-filename check with a real, measured
+    resolution + aspect-ratio check against HERO_MIN_WIDTH/HEIGHT/ASPECT.
+    `budget` is a single-element list used as a mutable counter shared
+    across one pick_hero() call, decremented once per actual network probe
+    so a run with many low-quality candidates in a row still finishes in
+    bounded time (HERO_MAX_PROBES_PER_RUN) instead of probing the entire
+    pool. Results are cached per URL for the run's lifetime since the same
+    photo can legitimately turn up more than once."""
+    if not url or looks_like_placeholder(url):
+        return False
+    if url in _hero_image_quality_cache:
+        return _hero_image_quality_cache[url]
+    if budget[0] <= 0:
+        return False  # out of probe budget -- treat as unverified, skip it
+    budget[0] -= 1
+    dims = probe_image_dimensions(url)
+    ok = False
+    if dims:
+        w, h = dims
+        if w >= HERO_MIN_WIDTH and h >= HERO_MIN_HEIGHT and h > 0 and (w / h) >= HERO_MIN_ASPECT:
+            ok = True
+    _hero_image_quality_cache[url] = ok
+    return ok
+
+
+def pick_hero(pool, used, n=3):
+    """Top N (3, both on desktop and mobile) stories from the diversified
+    top_pool that actually have a usable photo, in the pool's existing
+    top-first order -- with the added constraint that every pick must come
+    from a DIFFERENT category than the ones already picked, so the hero
+    never shows e.g. three Business stories back to back. Marks each pick
+    into the shared `used` dedup set (same as pick()/pick_with_image()
+    above) and skips anything already in it -- a hero headline must never
+    also show up in Top Stories, a category grid, the ticker, or the wire
+    further down the page. Called before any other pick against top_pool
+    (see main()) so the hero gets first choice and everything else
+    naturally excludes it.
+    An article with no photo is simply skipped -- never used as a hero
+    headline -- per spec; the next candidate (regardless of category) is
+    tried instead so a hero slot is never left empty just because the
+    first photo-less story in line got passed over. Beyond just "has a
+    photo", every candidate's image also has to clear the media quality
+    guardrail (hero_image_quality_ok(), above): real measured resolution
+    and a landscape-friendly aspect ratio, and not a generic/placeholder
+    fallback image -- the hero is the single biggest photo on the page, so
+    it's held to a higher bar than a thumbnail-sized card elsewhere on the
+    site. If the pool genuinely doesn't contain n distinct categories with
+    a qualifying photo (or the probe budget runs out first), fewer than n
+    items come back (render_hero() simply renders however many were
+    found)."""
+    out = []
+    seen_categories = set()
+    probe_budget = [HERO_MAX_PROBES_PER_RUN]
+    for item in pool:
+        if item["url"] in used:
+            continue
+        if not hero_image_quality_ok(item.get("image"), probe_budget):
+            continue
+        cat = item.get("category")
+        if cat in seen_categories:
+            continue
+        out.append(item)
+        seen_categories.add(cat)
+        used.add(item["url"])
+        if len(out) >= n:
+            break
+    return out
+
+
+def render_hero(items):
+    """Renders the two independently-templated pieces of the cinematic
+    hero -- background photo layers and the headline stack -- each wired to
+    the same story index so hovering (desktop) or scrolling (mobile) swaps
+    the matching photo (see the hero script in index.html). Headlines are
+    Title Cased for hero display only; every other rendering of the same
+    story elsewhere on the page keeps its original casing."""
+    bg_parts, title_parts = [], []
+    for i, item in enumerate(items):
+        active = " active" if i == 0 else ""
+        img = esc(item["image"])
+        tag = esc((item.get("lean") or CAT_KICKER.get(item["category"], "")).upper())
+        headline = esc(title_case(item["title"]))
+        url = esc(item["url"])
+        bg_parts.append(f'<div class="bg-layer{active}" data-i="{i}" style="background-image:url(\'{img}\');"></div>')
+        title_parts.append(
+            f'<a class="hero-title-item{active}" data-i="{i}" href="{url}" target="_blank" rel="noopener noreferrer">'
+            f'<span class="ht-text">{headline}</span><span class="ht-tag mono">{tag}</span></a>'
+        )
+    return "\n".join(bg_parts), "\n".join(title_parts)
 
 
 def diversify(pool, key=lambda it: it["source"]):
@@ -828,13 +1087,23 @@ def main():
     # category or outlet happened to post most recently.
     top_pool = build_top_pool(by_category, ALL_CATEGORIES)
 
+    # Cinematic hero (3 headlines, desktop hover-swap / mobile snap-scroll,
+    # see index.html's .a24-hero) gets first choice against top_pool, same
+    # as lead_item below -- picked here, before anything else, so the rest
+    # of the page naturally excludes whatever the hero used via the shared
+    # `used` set.
+    hero_items = pick_hero(top_pool, used, 3)
+
     lead_item = pick_with_image(top_pool, used)
     lead = [lead_item] if lead_item else []
-    subs = pick(top_pool, 6, used)
+    # Sub-stories render a photo box next to the headline whenever the item
+    # has one, so fill those 6 slots with photo-bearing items first (falling
+    # back to photo-less ones only if the pool runs short) rather than
+    # whichever 6 happened to be freshest.
+    subs = pick_photo_priority(top_pool, 6, used)
     briefing = pick(top_pool, 4, used)
     digest = pick(top_pool, 4, used)
-    ticker_items = pick(top_pool, 18, used) or (lead + subs)
-    wire_items = pick(top_pool, 20, set()) or ticker_items  # wire allowed to overlap ticker
+    wire_items = pick(top_pool, 20, set()) or (lead + subs)  # wire allowed to overlap other sections
 
     # Every category (not just Markets/Christian) now gets its own dedicated,
     # fully-populated card grid -- diversified across sources within that
@@ -849,7 +1118,10 @@ def main():
     for c in ALL_CATEGORIES:
         pool = diversify(by_category[c])
         lead_it = pick_with_image(pool, used)
-        items = ([lead_it] if lead_it else []) + pick(pool, 9, used)
+        # Same photo-priority treatment as subs above: every card in a
+        # category grid has an image slot, so fill it with photo-bearing
+        # articles first rather than whichever came up next in pool order.
+        items = ([lead_it] if lead_it else []) + pick_photo_priority(pool, 9, used)
         if len(items) < 6:
             have = {it["url"] for it in items}
             for it in by_category[c]:
@@ -878,6 +1150,11 @@ def main():
         sys.exit(1)
 
     html_text = open(INDEX_PATH, encoding="utf-8").read()
+
+    if hero_items:
+        hero_bg_html, hero_titles_html = render_hero(hero_items)
+        html_text = replace_between(html_text, "<!-- AUTO:HERO_BG_START -->", "<!-- AUTO:HERO_BG_END -->", hero_bg_html)
+        html_text = replace_between(html_text, "<!-- AUTO:HERO_TITLES_START -->", "<!-- AUTO:HERO_TITLES_END -->", hero_titles_html)
 
     briefing_html = "\n".join(render_briefing_item(it) for it in briefing) if briefing else html_text
     if briefing:
@@ -913,8 +1190,6 @@ def main():
     html_text = replace_between(html_text, "<!-- AUTO:EXPLORE_RIGHT_START -->", "<!-- AUTO:EXPLORE_RIGHT_END -->", render_explore_list(explore_right_items, now))
     html_text = replace_between(html_text, "<!-- AUTO:EXPLORE_LEFT_START -->", "<!-- AUTO:EXPLORE_LEFT_END -->", render_explore_list(explore_left_items, now))
 
-    if ticker_items:
-        html_text = replace_between(html_text, "<!-- AUTO:TICKER_START -->", "<!-- AUTO:TICKER_END -->", render_ticker_js(ticker_items))
     if wire_items:
         html_text = replace_between(html_text, "<!-- AUTO:WIRE_START -->", "<!-- AUTO:WIRE_END -->", render_wire_js(wire_items, now))
 
