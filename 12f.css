@@ -137,6 +137,21 @@ a{color:inherit; text-decoration:none;}
   .masthead-utility .utility-right{gap:10px;}
 }
 
+/* Restored WSJ-style centered nameplate (the site's original masthead
+   treatment, from before the A24-style cinematic hero existed). Sits
+   between the utility row and the rule/nav-chip row below it. Swapped
+   between the light/dark logo PNGs by applyTheme() in index.html, same
+   asset pair the footer's own adaptive logo already uses. */
+.masthead-logo{text-align:center; padding:26px 16px 22px;}
+.masthead-logo img{
+  height:112px; width:auto; margin:0 auto; display:inline-block;
+  filter:drop-shadow(0 0 34px rgba(var(--accent-rgb),0.18));
+}
+@media (max-width:840px){
+  .masthead-logo{padding:20px 16px 16px;}
+  .masthead-logo img{height:74px;}
+}
+
 .masthead-rule{
   height:1px; margin:0 clamp(16px,4vw,48px);
   background:linear-gradient(90deg, transparent, var(--border-strong) 12%, var(--border-strong) 88%, transparent);
@@ -650,220 +665,15 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 .browse-search::placeholder{color:var(--text-faint);}
 .browse-search:focus{outline:none; border-color:var(--border-strong);}
 
-/* ==========================================================================
-   A24-style cinematic hero — homepage only. Truly full-bleed: 100% of the
-   viewport's width AND height (100dvh, with a 100vh fallback for browsers
-   that don't support dvh) on every device, not a fixed vh fraction, so it
-   always fills the whole screen edge-to-edge no matter the device. Photo
-   per headline (crossfades on hover on desktop / snaps into view on scroll
-   on mobile — see the MOBILE note below), 3 headlines total, each from a
-   DIFFERENT category (see pick_hero() in refresh.py — it skips anything
-   without a real photo and anything whose category is already used by an
-   earlier pick, so the hero never shows 3 headlines from the same section
-   and never a headline with no image), headline stack bottom-left, 12F
-   wordmark simply centered in the topbar (the theme toggle and search
-   button that used to flank it here now live below the hero instead — see
-   .masthead-utility further down — so the topbar is just the wordmark and
-   needs no special centering trick). The hero is a pure cinematic visual
-   now, full stop — no overlay, no ticker/live band, no per-photo
-   brightness/contrast-tracking logic sits on top of it. The Live Feed
-   (.live-feed, defined further down) lives directly below the hero instead,
-   as its own sibling element, and docks to the top of the viewport via
-   position:sticky once a visitor scrolls into the main site feed.
-   The hero's photo/headline/logo chrome stays always-dark (white text over
-   photo) regardless of the site-wide light/dark toggle — same precedent as
-   the ticker/cover-art elsewhere on the site, so hardcoded white/rgba
-   colors are used here on purpose instead of the theme custom properties.
-   Since the toggle lives outside the hero entirely (below it, in
-   .masthead-utility), this is automatically true rather than something
-   that has to be specially guarded against — there's no theme-aware
-   element inside .a24-hero left to accidentally react to the toggle.
-   Darkening over the photo is a single FLAT, uniform tint (.hero-scrim) —
-   no gradient anywhere in the hero, so there's never a visible fade or
-   band from top to bottom or edge to edge, just a consistent cinematic
-   color-grade plus a faint film-grain texture. Legibility for the headline
-   stack and the 12F wordmark comes from a text-shadow halo on each — kept
-   deliberately TIGHT (small blur radius) so the letterforms themselves
-   stay crisp and sharp-edged rather than looking hazy/glowing; the grain
-   and tint only ever touch the photo behind the text, never the text
-   itself (text paints in a later, higher stacking layer than the scrim).
-   MOBILE (<=900px) swaps to a completely different presentation: a custom
-   touch-driven slider of exactly 3 full-height slides, one per headline
-   (see .hero-mobile / .hero-mobile-track / .hero-mslide below), built
-   client-side from this same server-rendered bg-layer/hero-title-item data
-   — refresh.py and the AUTO:HERO_* markers stay the single source of
-   truth; index.html's hero script just reshapes that same data into
-   slides for narrow viewports, and drives the slide-to-slide transitions
-   with a JS-animated transform rather than native scrolling (see the
-   touchstart/touchend handling in index.html). The topbar (logo/icons)
-   stays pinned in place across all 3 slides (it's a sibling positioned
-   over the slider, not inside it), and a minimal "N | total" counter
-   bottom-right tracks the current slide as the visitor swipes.
-   Populated server-side by refresh.py between the AUTO:HERO_* markers in
-   index.html; updates automatically every hour. */
-.a24-hero{
-  position:relative;
-  width:100%;
-  /* The hero now sits directly at the top of the page (the old sticky
-     "always-on live band" above it has been removed entirely), so it
-     fills the full viewport with no offset needed. */
-  height:100vh;
-  height:100dvh;
-  min-height:480px;
-  overflow:hidden;
-  background:#0A0A0E;
-  color:#F5F4EF;
-  /* Shared film-grain texture, reused by both the desktop .hero-scrim and
-     each mobile .mslide-scrim so there's one definition of the "look". */
-  --hero-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-.hero-bg{position:absolute; inset:0;}
-.bg-layer{
-  position:absolute; inset:0;
-  background-size:cover; background-position:center;
-  opacity:0;
-  transition:opacity .9s ease;
-}
-.bg-layer.active{opacity:1;}
-/* Flat, uniform "film" tint -- deliberately NOT a gradient, so the hero
-   never shows a visible fade/banding from top to bottom or edge to edge.
-   Same intensity everywhere, like a color-graded movie still, plus a very
-   faint grain texture for a filmic (not flat-digital) feel. Legibility for
-   the headline stack and the topbar logo comes from text-shadow/drop-shadow
-   halos on each of those elements individually (see .hero-title-item and
-   .hero-logo-mark below) rather than from any extra darkening here. */
-.hero-scrim{
-  position:absolute; inset:0;
-  background-color:rgba(9,10,15,0.34);
-  background-image:var(--hero-grain);
-  background-repeat:repeat;
-  background-size:140px 140px;
-  background-blend-mode:overlay;
-  pointer-events:none;
-}
-
-/* Theme toggle + search used to live in here too (left/right of the
-   wordmark, using their equal 38px-circle width to keep it centered); they
-   now live below the hero in .masthead-utility instead (see that block
-   further down), so the toggle only ever touches the page below the hero
-   and never the hero's own always-dark chrome. The topbar is just the
-   centered 12F wordmark now, so a simple center alignment is all it needs. */
-.hero-topbar{
-  position:absolute; top:0; left:0; right:0;
-  /* Simply needs to stay above .hero-mobile's own z-index:1 (and its
-     scrolled-through slide content) so the logo stays visibly pinned on
-     top across every slide on mobile. Same reasoning applies to
-     .hero-mobile-counter below. */
-  z-index:1000;
-  display:flex; align-items:center; justify-content:center;
-  /* Top padding set to 64px on desktop (see the max-width:900px override
-     further down for the 24px mobile value), measured directly off a24.com's
-     own nav row (page-top-to-nav-icon gap on a24films.com/films/onslaught
-     came out to ~65.5px in logical CSS pixels from a retina screenshot) so
-     the desktop hero topbar sits at the same vertical depth A24 uses. */
-  padding:64px clamp(16px,4vw,40px) 20px;
-}
-/* The actual brand mark now lives here (top-center of the hero) instead of
-   the plain typed "12F" text this used to be, and instead of the small
-   adaptive wordmark that used to sit below the hero on the main site (see
-   the removed .masthead-logo). It's its own dedicated asset --
-   12f-logo-mark.png, a plain solid-white "12F" wordmark cropped tight to
-   its own ink (not the two-tone 12f-logo-light.png/12f-logo-dark.png pair
-   used elsewhere on the site, e.g. the footer, which are intentionally
-   untouched here) -- and stays a single fixed appearance regardless of
-   theme or the current hero photo's own colors, mirroring exactly how the
-   text version it replaces always stayed plain white -- the two-layer
-   drop-shadow (the img equivalent of the old text-shadow) is what keeps
-   it legible over any photo instead of swapping variants. Sized against
-   A24's own site as a reference point (a
-   centered top-nav wordmark is the same layout pattern) -- their logo runs
-   noticeably bigger on desktop relative to mobile than a single fixed size
-   here could match, so this splits into its own two sizes at the same
-   900px breakpoint the rest of the hero already switches on, rather than
-   one flat value for both. */
-/* Wraps the mark so it's a real clickable link back to the homepage
-   (see index.html) -- display:inline-flex keeps it hugging the image's
-   own box exactly (no extra inline-baseline whitespace) so it doesn't
-   throw off the topbar's centering. */
-.hero-logo-link{
-  display:inline-flex;
-}
-.hero-logo-link:hover .hero-logo-mark{opacity:0.82;}
-.hero-logo-mark{
-  height:36px; width:auto; max-width:240px;
-  filter:
-    drop-shadow(0 1px 3px rgba(0,0,0,0.8))
-    drop-shadow(0 2px 12px rgba(0,0,0,0.55));
-  transition:opacity .2s ease;
-}
-@media (max-width:900px){
-  .hero-logo-mark{height:30px; max-width:165px;}
-}
-
-.hero-body{
-  /* Used to reserve extra bottom clearance for the live band that lived
-     inside the hero; now that it's relocated below the hero entirely (see
-     .live-feed further down), this just needs its own comfortable margin
-     off the bottom edge. */
-  position:absolute; z-index:5; left:0; right:0; bottom:36px;
-  display:flex; align-items:flex-end; justify-content:flex-start;
-  padding:0 clamp(16px,4vw,40px);
-}
-
-.hero-titles{display:flex; flex-direction:column; gap:2px; max-width:74%;}
-.hero-title-item{
-  display:flex; align-items:baseline; gap:12px;
-  padding:7px 0;
-  font-family:'Newsreader', serif; font-weight:700;
-  font-size:clamp(19px,2.7vw,34px); line-height:1.12;
-  /* All three headlines are always solid white -- no dimmed/grey "inactive"
-     state. Which photo is currently showing already tells you which
-     headline is active; the text itself doesn't need to change color to
-     communicate that. Legibility comes from this text shadow alone, kept
-     TIGHT (small blur radius, no soft outer glow, no gradient) so the
-     letterforms stay crisp and sharp-edged rather than hazy. */
-  color:#F5F4EF;
-  text-shadow:0 1px 2px rgba(0,0,0,0.85);
-  cursor:pointer;
-}
-.hero-title-item .ht-text{display:inline-block; transition:opacity .2s ease;}
-/* Hovering a title dims the headline text itself slightly -- a light
-   "pressed/interactive" cue that it's hoverable and currently driving the
-   background swap -- while the small kicker tag brightens independently
-   below, so the two hover effects don't compound (the tag lives in its own
-   span, not affected by the text's opacity). */
-.hero-title-item:hover .ht-text{opacity:0.78;}
-.hero-title-item .ht-tag{
-  font-size:10px; font-weight:600; letter-spacing:.14em;
-  color:rgba(245,244,237,0.68); text-transform:uppercase;
-  text-shadow:0 1px 2px rgba(0,0,0,0.85);
-  transition:opacity .25s ease;
-  white-space:nowrap;
-}
-/* Hover/active affordance on the kicker tag: it brightens to full white
-   (independent of the headline text's own opacity dim above). Which photo
-   is currently showing is the primary cue for which headline is "active". */
-.hero-title-item.active .ht-tag, .hero-title-item:hover .ht-tag{color:#F5F4EF;}
-
-/* Live Feed -- lives directly below the hero (not inside it) on both mobile
-   and desktop, so the hero itself stays a pure cinematic visual with no
-   overlay, tint, or per-photo brightness/contrast-tracking logic on top of
-   it (that whole mechanism has been removed entirely along with this
-   element's old home inside .a24-hero). Docks to the top of the viewport
-   via native position:sticky the moment a visitor scrolls down into the
-   main site feed, with a fully opaque theme-matched background (solid
-   white in light mode, solid near-black in dark mode via var(--bg)) rather
-   than the old semi-transparent panel that used to sit directly on the
-   hero photo -- sticky needs an opaque background to actually read as
-   "docked" instead of letting content behind it show through. Because it
-   sits in normal document flow immediately after the hero (a sibling, not
-   a child), CSS's own sticky behavior means it can never ride up over the
-   hero when scrolling back toward the top: once the page scrolls back up
-   past the live feed's natural position, it simply un-sticks and continues
-   scrolling with the rest of the page -- no scroll-tracking JS needed to
-   enforce that boundary. Reuses the .ticker-tag / .ticker-dot /
-   .ticker-track / .ticker-item styles above (already theme-aware via CSS
-   custom properties), just scoped here for the sticky bar's own layout. */
+/* Live Feed -- the always-on sticky ticker band at the very top of the
+   page. Docks to the top of the viewport via native position:sticky the
+   moment a visitor scrolls down into the main site feed, with a fully
+   opaque theme-matched background (solid white in light mode, solid
+   near-black in dark mode via var(--bg)) so sticky content actually reads
+   as "docked" instead of letting content behind it show through. Reuses
+   the .ticker-tag / .ticker-dot / .ticker-track / .ticker-item styles
+   above (already theme-aware via CSS custom properties), just scoped here
+   for the sticky bar's own layout. */
 .live-feed{
   position:sticky; top:0; z-index:60;
   display:flex; align-items:center;
@@ -894,137 +704,4 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
   .live-feed{height:38px;}
   .live-feed .ticker-item{font-size:11px;}
   .live-feed .ticker-item .src{display:none;}
-}
-
-/* ---------- Mobile hero: vertical snap-scroll, 1 headline per slide ----------
-   Below 900px the hover-crossfade desktop hero (.hero-bg / .hero-scrim /
-   .hero-body) is swapped out for .hero-mobile: a full-bleed vertical
-   snap-scroll of exactly 3 slides (.hero-mslide), one per headline, built
-   client-side (see the hero script in index.html) from the exact same
-   server-rendered bg-layer + hero-title-item data -- nothing is duplicated
-   in the markup refresh.py outputs, this is purely a mobile presentation
-   layer over the same 3 items.
-   The topbar (logo/icons) and the live band stay exactly where they are in
-   the DOM -- siblings of .hero-mobile, not inside it -- so they render
-   pinned in place above the scrolling slides on every one of the 3 screens,
-   never scrolling away. A minimal "current | total" counter sits bottom-
-   right, updated as each slide crosses into view. */
-@media (max-width:900px){
-  .hero-bg, .hero-scrim, .hero-body{display:none;}
-  /* Edge-to-edge mobile hero: the section already fills the full dynamic
-     viewport (100dvh, set on .a24-hero above) including the area behind the
-     status bar/notch/dynamic island, since nothing reserves space for it by
-     default. That's the "edge-to-edge" look, but it also means the centered
-     "12F" wordmark in .hero-topbar would otherwise sit right under the
-     status bar on notched phones. Pad the topbar down by the device's safe
-     area inset (falls back to 0 on non-notched devices/older browsers,
-     leaving 30px as the effective minimum via max()) so the wordmark stays
-     clear of the OS chrome while the photo behind it still extends all the
-     way to the true top edge. The 30px floor (up from 24px) was measured off
-     A24's own mobile nav row: page-top-to-MENU-icon gap came out to ~93px in
-     a 1260px-wide mobile screenshot (~7.4% of viewport width), scaled to a
-     390px-wide mobile viewport to match A24's spacing. */
-  .hero-topbar{padding-top:max(30px, env(safe-area-inset-top));}
-  /* Real, native scroll-snap container -- NOT a JS-simulated slider. An
-     earlier version of this drove slide changes with touchstart/touchmove/
-     touchend distance math plus a document.body scroll-lock (position:fixed
-     + overflow:hidden + touch-action:none, toggled by JS), which reliably
-     broke on real iOS Safari/Arc/Android Chrome: those browsers scroll on a
-     compositor thread that can commit a scroll/rubber-band gesture from the
-     very first touchmove before a non-passive JS listener's preventDefault()
-     call even runs, especially on a fast flick -- there's no way to fully
-     win that race from JS. Native CSS scroll-snap sidesteps it entirely by
-     using the browser's own scrolling/snapping instead of faking it, which
-     is also what a production site like A24's own mobile site relies on for
-     this same "swipe through full-bleed sections" pattern.
-     overscroll-behavior-y:contain (permanent baseline) stops a swipe that
-     runs out of slides to snap to from leaking into the page underneath
-     while still on slides 1/2; the .at-last-slide override below switches
-     that back to auto once the last slide is reached, so the *next* swipe
-     hands off to native page scroll with zero resistance (see the
-     onHeroScroll() toggle in index.html). scrollbar-width/::-webkit-
-     scrollbar hide the native scrollbar since this reads as a slider, not a
-     literal scrollable list. */
-  .hero-mobile{
-    position:absolute; inset:0; z-index:1;
-    overflow-y:scroll; overflow-x:hidden;
-    scroll-snap-type:y mandatory;
-    -webkit-overflow-scrolling:touch;
-    overscroll-behavior-y:contain;
-    scrollbar-width:none;
-  }
-  .hero-mobile::-webkit-scrollbar{display:none;}
-  .hero-mobile.at-last-slide{overscroll-behavior-y:auto;}
-  /* Built client-side (see index.html): holds all 3 .hero-mslide elements
-     stacked vertically in normal flow -- no transform, no JS-driven
-     positioning. Each slide's own height (below) is what defines the native
-     scroll-snap stop points. */
-  .hero-mobile-track{
-    position:relative;
-    width:100%;
-  }
-  .hero-mslide{
-    position:relative;
-    width:100%;
-    /* Explicit height (not 100%) since .hero-mobile-track is a plain
-       auto-height block -- a percentage height here wouldn't resolve
-       against it. Matches .a24-hero's own 100vh/100dvh fallback pairing
-       so each slide is exactly one "page" of the scroll-snap container --
-       deliberately NOT -webkit-fill-available here (unlike the old
-       position:fixed .viewport-locked rule this replaces): that value
-       needs a definite containing block to resolve against and computes
-       to 0 for a plain in-flow block like this one. scroll-snap-align:start
-       is what makes this a snap stop. */
-    height:100vh;
-    height:100dvh;
-    scroll-snap-align:start;
-    scroll-snap-stop:always;
-  }
-  .mslide-bg{
-    position:absolute; inset:0;
-    /* Full-screen 100vh slides crop hero photos far more aggressively along
-       the vertical axis than the wider desktop hero ever does, so a plain
-       center crop regularly cuts off faces/heads in portrait-style news
-       photography. Biasing the focal point up toward the top third (20%
-       instead of 50%) keeps faces and other key subjects -- which are far
-       more often framed high in the shot than dead-center or low -- in
-       frame on narrow screens, the same way a film still gets reframed for
-       a different aspect ratio without losing its subject. */
-    background-size:cover; background-position:center 20%;
-  }
-  .mslide-scrim{
-    position:absolute; inset:0;
-    background-color:rgba(9,10,15,0.34);
-    background-image:var(--hero-grain);
-    background-repeat:repeat;
-    background-size:140px 140px;
-    background-blend-mode:overlay;
-    pointer-events:none;
-  }
-  .mslide-title{
-    position:absolute; left:0; right:66px; bottom:44px;
-    padding:0 16px;
-    display:block;
-    font-family:'Newsreader', serif; font-weight:700;
-    font-size:clamp(16px,4.6vw,21px); line-height:1.2;
-    color:#F5F4EF;
-    text-shadow:0 1px 2px rgba(0,0,0,0.85);
-  }
-  .mslide-title .ht-tag{
-    display:block; margin-top:6px;
-    font-size:10px; font-weight:600; letter-spacing:.14em;
-    color:rgba(245,244,237,0.72); text-transform:uppercase;
-    text-shadow:0 1px 2px rgba(0,0,0,0.85);
-  }
-  .hero-mobile-counter{
-    position:absolute; right:16px; bottom:44px; z-index:1000;
-    display:flex; flex-direction:column; align-items:center; gap:6px;
-    font-size:11px; color:rgba(245,244,237,0.85);
-    text-shadow:0 1px 2px rgba(0,0,0,0.85);
-    pointer-events:none;
-  }
-  .hero-mobile-counter .hmc-bar{width:1px; height:14px; background:rgba(245,244,237,0.55);}
-}
-@media (min-width:901px){
-  .hero-mobile, .hero-mobile-counter{display:none;}
 }
