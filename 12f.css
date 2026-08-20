@@ -135,24 +135,6 @@ a{color:inherit; text-decoration:none;}
   .masthead-utility .utility-right{gap:10px;}
 }
 
-/* This is the secondary, small "main site" wordmark that lives in the
-   flow just below the hero (the hero itself is the primary, full-size
-   "12F" brand moment now, so this one stays modest -- a slim divider
-   between the utility row and the nav rule, not a second hero logo). It's
-   theme-adaptive: see #masthead12fLogo's default src in the markup plus
-   setAdaptiveLogo() in the theme-toggle script, which swaps between the
-   solid-dark (3.png) and light-outline (2.png) glitch marks and crossfades
-   the change so it never pops. */
-.masthead-logo{text-align:center; padding:10px 16px;}
-.masthead-logo img{
-  height:26px; width:auto; margin:0 auto; display:inline-block;
-  transition:opacity .15s ease;
-}
-@media (max-width:840px){
-  .masthead-logo{padding:8px 16px;}
-  .masthead-logo img{height:22px;}
-}
-
 .masthead-rule{
   height:1px; margin:0 clamp(16px,4vw,48px);
   background:linear-gradient(90deg, transparent, var(--border-strong) 12%, var(--border-strong) 88%, transparent);
@@ -298,15 +280,25 @@ a{color:inherit; text-decoration:none;}
 .byline a{color:var(--text-faint);}
 .byline a:hover{color:var(--accent); text-decoration:underline;}
 
-/* real, hotlinked article photography — pulled from the original publisher */
+/* real, hotlinked article photography — pulled from the original publisher.
+   aspect-ratio (not a fixed height) is what keeps these fluid with the
+   column's own width at every breakpoint, and object-position:center top
+   biases the crop toward the top of the frame -- news photography usually
+   puts faces/heads in the upper two-thirds, so a plain center-center crop
+   on a wide card was regularly slicing through foreheads/hairlines. Every
+   .cover-photo variant below (the default list-row size and the bigger
+   featured-card override) stays within a natural editorial landscape ratio
+   (16/9 or 3/2) rather than the much wider, more crop-prone ratios this
+   used before. */
 .media{margin:10px 0 4px;}
 .cover-photo{
   width:100%; aspect-ratio:16/9; border-radius:10px;
-  object-fit:cover; display:block;
+  object-fit:cover; object-position:center top;
+  display:block;
   border:1px solid rgba(255,255,255,0.10);
   background:#111114;
 }
-.flat-item-photo .cover-photo{aspect-ratio:16/10;}
+.flat-item-photo .cover-photo{aspect-ratio:3/2;}
 
 .story-row{display:flex; gap:16px; align-items:flex-start; margin-top:2px;}
 .story-row .story-col{flex:1; min-width:0;}
@@ -336,7 +328,11 @@ a{color:inherit; text-decoration:none;}
 .cover-art--markets svg{color:var(--brass);}
 .cover-art--christian{background:linear-gradient(135deg, #241017, #0A0A0E 70%);}
 .cover-art--christian svg{color:var(--live);}
-.flat-item-photo .cover-art{aspect-ratio:16/10;}
+/* Matches .flat-item-photo .cover-photo's ratio above -- a card's image-box
+   height shouldn't visibly jump depending on whether that particular
+   article happened to have a real photo or fell back to this placeholder
+   art. */
+.flat-item-photo .cover-art{aspect-ratio:3/2;}
 
 .photo-credit{font-size:9.5px; color:var(--text-faint); margin:0 0 10px; letter-spacing:.02em;}
 
@@ -462,7 +458,7 @@ a{color:inherit; text-decoration:none;}
   border-bottom:1px solid var(--border-strong);
   margin-bottom:8px;
 }
-.flat-grid > .flat-item-photo:first-child .cover-photo{aspect-ratio:16/8;}
+.flat-grid > .flat-item-photo:first-child .cover-photo{aspect-ratio:3/2;}
 .flat-grid > .flat-item-photo:first-child h3{
   font-size:clamp(24px,2.4vw,34px); line-height:1.16; margin:10px 0 10px;
 }
@@ -724,9 +720,9 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
    Same intensity everywhere, like a color-graded movie still, plus a very
    faint grain texture for a filmic (not flat-digital) feel. Legibility for
    the headline stack, the live band, and the topbar logo comes from
-   text-shadow halos on each of those elements individually (see
-   .hero-title-item, .hero-ticker, .hero-logo below) rather than from any
-   extra darkening here. */
+   text-shadow/drop-shadow halos on each of those elements individually
+   (see .hero-title-item, .hero-ticker, .hero-logo-mark below) rather than
+   from any extra darkening here. */
 .hero-scrim{
   position:absolute; inset:0;
   background-color:rgba(9,10,15,0.34);
@@ -748,9 +744,20 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
   display:flex; align-items:center; justify-content:center;
   padding:20px clamp(16px,4vw,40px);
 }
-.hero-logo{
-  font-size:15px; font-weight:600; letter-spacing:.34em; color:#F5F4EF;
-  text-shadow:0 1px 3px rgba(0,0,0,0.8), 0 2px 12px rgba(0,0,0,0.55);
+/* The actual brand mark now lives here (top-center of the hero) instead of
+   the plain typed "12F" text this used to be, and instead of the small
+   adaptive wordmark that used to sit below the hero on the main site (see
+   the removed .masthead-logo). It stays a single fixed appearance (the
+   light-outline mark) regardless of theme or the current hero photo's own
+   colors, mirroring exactly how the text version it replaces always
+   stayed plain white -- the two-layer drop-shadow (the img equivalent of
+   the old text-shadow) is what keeps it legible over any photo instead of
+   swapping variants. */
+.hero-logo-mark{
+  height:20px; width:auto;
+  filter:
+    drop-shadow(0 1px 3px rgba(0,0,0,0.8))
+    drop-shadow(0 2px 12px rgba(0,0,0,0.55));
   pointer-events:none;
 }
 
@@ -926,6 +933,24 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
     scrollbar-width:none;
   }
   .hero-mobile::-webkit-scrollbar{display:none;}
+  /* Turns snapping off entirely once the hero script (see setMobileActive()
+     further down) reports the visitor has arrived at the second-to-last
+     slide. This is a whole-container toggle rather than just dropping
+     scroll-snap-align on the last slide alone -- that CSS-only approach was
+     tried and verified broken: with `mandatory` still active and the last
+     slide no longer a valid snap target, both scrollTo() and direct
+     scrollTop writes aimed at it were silently corrected straight back to
+     the second-to-last slide's snap point instead of landing there, which
+     would have trapped a real visitor exactly like the resistance this is
+     supposed to fix. Releasing the whole container once a visitor has
+     ALREADY firmly landed on the second-to-last slide sidesteps that dead
+     zone completely -- there's no lingering snap point left to correct
+     back to once they start scrolling onward from there. Slides 1 and 2
+     both still snap firmly getting there; this only changes what happens
+     once a visitor is done with slide 2 and moving past it. */
+  .hero-mobile.snap-released{
+    scroll-snap-type:none;
+  }
   .hero-mslide{
     position:relative;
     width:100%; height:100%;
@@ -936,7 +961,11 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
        slide 3 into the rest of the site gets stopped dead on it instead --
        exactly the "trapped"/stiff feeling this fixes. :normal still snaps
        cleanly slide-to-slide on an ordinary scroll, it just no longer
-       fights a fast gesture that's clearly headed further than one slide. */
+       fights a fast gesture that's clearly headed further than one slide.
+       Every slide (including the last) keeps scroll-snap-align:start --
+       see .hero-mobile.snap-released above for why the last slide is
+       instead released by turning off snapping for the whole container,
+       not by dropping this on an individual slide. */
     scroll-snap-stop:normal;
   }
   .mslide-bg{
