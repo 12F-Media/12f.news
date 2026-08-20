@@ -6,7 +6,12 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
-<meta content="#FFFFFF" id="themeColorMeta" name="theme-color"/>
+<!-- Matches the hero's own always-dark background (#0A0A0E) since the hero
+     is what's in view on first paint -- JS hands this off to the normal
+     light/dark theme color the moment a visitor scrolls past it (see
+     window.__setChromeColor in the hero script) or flips the theme toggle
+     while already scrolled past it. -->
+<meta content="#0A0A0E" id="themeColorMeta" name="theme-color"/>
 <title>12F — Caught Up In 90 Seconds | AI-Powered News Aggregator</title>
 <meta content="12F is an AI-powered news aggregator that gets you caught up in 90 seconds. Accurate news from politics, markets, world, tech, sports, culture, and Christian World News — pulled from every side of the spectrum, each source rated for bias, and updated automatically every hour." name="description"/>
 <meta content="12F, news aggregator, AI news, AI-powered news, accurate news, breaking news, caught up in 90 seconds, unbiased news, news bias ratings, media bias checker, real-time news, hourly news updates, top headlines today, politics news, world news, markets news, business news, tech news, sports news, culture news, Christian news, Christian World News" name="keywords"/>
@@ -1164,6 +1169,35 @@
     setInterval(render, 60000);
   })();
 
+  // ---------- Shared browser-chrome color (address bar / status bar tint) ----------
+  // Neither Safari nor Chrome will ever let a normal browser tab's own
+  // address-bar/status-bar chrome become transparent or show page content
+  // through it -- that's fixed OS/browser UI, not something any website's
+  // CSS or env(safe-area-inset-top) padding can reach (those only take
+  // effect once a visitor adds the site to their Home Screen and opens it
+  // as its own standalone app -- see the apple-mobile-web-app-* meta tags
+  // in <head>). What a normal tab's chrome CAN do is tint itself to match
+  // <meta name="theme-color">, so a plain white/black bar doesn't sit
+  // awkwardly on top of the cinematic hero photo. The hero is always a
+  // dark, full-bleed image by design regardless of the site's light/dark
+  // theme, so the chrome should match ITS color while the hero is in view,
+  // then hand off to the normal theme-driven color once a visitor scrolls
+  // past it into the plain site background. Both the hero's own scroll
+  // tracker (below) and the theme toggle (further down the page) need to
+  // set this, so it's shared here instead of living inside either one's
+  // own closure.
+  window.__heroInView = true;
+  window.__setChromeColor = function(){
+    const meta = document.getElementById('themeColorMeta');
+    if(!meta) return;
+    if(window.__heroInView){
+      meta.setAttribute('content', '#0A0A0E');
+    } else {
+      const dark = document.documentElement.dataset.theme === 'dark';
+      meta.setAttribute('content', dark ? '#0A0A0E' : '#FFFFFF');
+    }
+  };
+
   // ---------- A24-style hero: hover-swap between headline/photo, plus
   // auto-contrast for the live band's text. The band itself has no
   // background of its own -- it sits directly on the photo so its colors
@@ -1352,25 +1386,35 @@
     // the inner slide position back to slide 1 the moment the visitor
     // scrolls back up past that point, so re-entering the hero always
     // starts fresh at the top instead of wherever it was left mid-scroll.
-    if(ticker || heroMobile){
-      let belowHero = false;
-      function updateHeroScrollState(){
-        const rect = hero.getBoundingClientRect();
-        const shouldPin = rect.bottom <= 0;
-        if(ticker && shouldPin !== belowHero){
-          ticker.classList.toggle('pinned', shouldPin);
-        }
-        if(heroMobile && belowHero && !shouldPin){
-          // Just crossed back up from "below the hero" to "hero visible
-          // again" -- snap the inner mobile slide-scroller back to slide 1.
-          heroMobile.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-        }
-        belowHero = shouldPin;
+    // Runs unconditionally (not just when ticker/heroMobile exist) since the
+    // browser-chrome-color handoff below applies regardless of whether this
+    // particular page has those elements.
+    let belowHero = false;
+    function updateHeroScrollState(){
+      const rect = hero.getBoundingClientRect();
+      const shouldPin = rect.bottom <= 0;
+      if(ticker && shouldPin !== belowHero){
+        ticker.classList.toggle('pinned', shouldPin);
       }
-      window.addEventListener('scroll', updateHeroScrollState, { passive: true });
-      window.addEventListener('resize', updateHeroScrollState);
-      updateHeroScrollState();
+      if(heroMobile && belowHero && !shouldPin){
+        // Just crossed back up from "below the hero" to "hero visible
+        // again" -- snap the inner mobile slide-scroller back to slide 1.
+        heroMobile.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+      if(shouldPin !== belowHero){
+        // Hand the browser-chrome tint off between the hero's own always-
+        // dark color and the normal theme-driven color the instant the
+        // hero crosses fully out of (or back into) view -- see
+        // window.__setChromeColor above for why this can't just be a
+        // static meta tag.
+        window.__heroInView = !shouldPin;
+        window.__setChromeColor();
+      }
+      belowHero = shouldPin;
     }
+    window.addEventListener('scroll', updateHeroScrollState, { passive: true });
+    window.addEventListener('resize', updateHeroScrollState);
+    updateHeroScrollState();
   })();
 
   // Every item below is a real, currently-published headline (pulled from each
@@ -1834,7 +1878,13 @@
       const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
       toggle.title = label;
       toggle.setAttribute('aria-label', label);
-      themeColorMeta.setAttribute('content', dark ? '#0A0A0E' : '#FFFFFF');
+      // Goes through the shared helper (see the hero script above) instead
+      // of setting themeColorMeta directly, so toggling the theme while
+      // the hero is still in view doesn't override its own always-dark
+      // browser-chrome color -- root.dataset.theme is already updated
+      // above, which is what the helper reads for the below-hero case.
+      if(window.__setChromeColor){ window.__setChromeColor(); }
+      else { themeColorMeta.setAttribute('content', dark ? '#0A0A0E' : '#FFFFFF'); }
     }
     toggle.addEventListener('click', function(){
       theme = theme === 'light' ? 'dark' : 'light';
