@@ -311,12 +311,11 @@ a{color:inherit; text-decoration:none;}
    on how big any main-site article photo is ever allowed to get -- it never
    grows past this aspect-ratio'd box no matter how large or oddly-shaped
    the source image is.
-   object-fit:contain (not cover) is deliberate: on the main site (outside
-   the hero) we show the publisher's actual stock photo in full, uncropped
-   and unzoomed, rather than pushing into it to fill the box edge-to-edge.
-   Any letterboxing that leaves (photo narrower/taller than the box) is
-   filled by the dark background below rather than cutting off any part of
-   the original image. */
+   Base rule below is object-fit:contain (full photo, letterboxed, nothing
+   cropped) -- that's what the Top Stories lead and sub-stories still use.
+   Category grids / Markets / Christian World News (anything inside a
+   .flat-grid) override to object-fit:cover further down in this file, for
+   a tighter, edge-to-edge WSJ-style crop. */
 .media{margin:10px 0 4px;}
 .cover-photo{
   width:100%; aspect-ratio:16/9; border-radius:10px;
@@ -332,6 +331,20 @@ a{color:inherit; text-decoration:none;}
 .thumb{
   width:104px; height:104px; flex:0 0 auto; object-fit:contain; object-position:center center; border-radius:8px;
   border:1px solid var(--border); background:var(--surface);
+}
+
+/* Below-fold topic grids (every category tab, plus Markets and Christian
+   World News -- anything rendered inside a .flat-grid) crop tighter than
+   the Top Stories lead: object-fit:cover fills the card's fixed
+   aspect-ratio frame edge-to-edge instead of letterboxing. object-position
+   is biased toward the upper-center of the photo, roughly where a face or
+   main subject sits in most editorial/news photography, so a plain
+   center-crop is far less likely to cut off a head than a dead-center crop
+   would be. This is a fixed heuristic, not real subject/face detection. */
+.flat-grid .cover-photo,
+.flat-grid .thumb{
+  object-fit:cover;
+  object-position:50% 30%;
 }
 @media (max-width:480px){ .thumb{width:80px; height:80px;} }
 
