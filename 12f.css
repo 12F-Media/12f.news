@@ -59,7 +59,7 @@
 }
 
 html{transition:none;}
-body, .ticker-wrap, .icon-btn, .briefing, .cover-art{
+body, .icon-btn, .briefing, .cover-art{
   transition:background-color .2s ease, border-color .2s ease, color .2s ease;
 }
 
@@ -79,20 +79,13 @@ a{color:inherit; text-decoration:none;}
 .mono{font-family:'IBM Plex Mono', monospace;}
 .serif{font-family:'Newsreader', serif;}
 
-/* ---------- Ticker — the signature always-on live band ----------
-   Follows the page theme: white/paper in light mode, dark chrome in dark
-   mode (toggle via data-theme). */
-.ticker-wrap{
-  position:sticky; top:0; z-index:80;
-  border-bottom:1px solid var(--border-strong);
-  box-shadow:0 1px 0 rgba(var(--accent-rgb),0.25), 0 12px 24px -12px rgba(var(--shadow-rgb),0.35);
-  background:var(--bg-elev);
-  overflow:hidden;
-  white-space:nowrap;
-  height:42px;
-  display:flex;
-  align-items:center;
-}
+/* ---------- Ticker — shared building blocks for the live band ----------
+   The site's only live ticker is the one built into the bottom of the
+   hero (.hero-ticker, defined further down); these base .ticker-tag /
+   .ticker-dot / .ticker-track / .ticker-item rules supply its shared
+   layout (flex, gap, animation) and are then re-themed by the
+   .hero-ticker-scoped rules below. There is no longer a separate
+   always-on band at the top of the header. */
 .ticker-tag{
   flex:0 0 auto;
   display:flex;
@@ -115,7 +108,6 @@ a{color:inherit; text-decoration:none;}
   padding-left:24px;
   animation:scroll 40s linear infinite;
 }
-.ticker-wrap:hover .ticker-track{animation-play-state:paused;}
 @keyframes scroll{
   0%{transform:translateX(0);}
   100%{transform:translateX(-50%);}
@@ -447,6 +439,27 @@ a{color:inherit; text-decoration:none;}
 .flat-item .meta a{color:var(--text-faint);}
 .flat-item .meta a:hover{color:var(--accent); text-decoration:underline;}
 
+/* WSJ-style featured "main article" treatment for the first (photo) card
+   in every category grid -- Top Stories, Markets, Christian World News,
+   and every other category tab (Politics, World, Tech, Sports, Culture)
+   all share render_flat_item(with_photo=True) for their first item, so
+   this one rule gives every category the same big-bold-headline-plus-photo
+   opening story that Top Stories already has, instead of that first card
+   looking identical to the dense list beneath it. Two-column below-fold
+   grids also let it span the full width, the way a WSJ section front runs
+   its lead story across the top before dropping into a list. */
+.flat-grid > .flat-item-photo:first-child{
+  grid-column:1 / -1;
+  padding-top:0;
+  border-bottom:1px solid var(--border-strong);
+  margin-bottom:8px;
+}
+.flat-grid > .flat-item-photo:first-child .cover-photo{aspect-ratio:16/8;}
+.flat-grid > .flat-item-photo:first-child h3{
+  font-size:clamp(24px,2.4vw,34px); line-height:1.16; margin:10px 0 10px;
+}
+.flat-grid > .flat-item-photo:first-child p{font-size:14.5px; line-height:1.6; color:var(--text-dim); max-width:68ch;}
+
 /* compact markets strip used at top of Markets section */
 .markets{
   display:grid; grid-template-columns:repeat(5,1fr); gap:1px;
@@ -620,3 +633,316 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
 }
 .browse-search::placeholder{color:var(--text-faint);}
 .browse-search:focus{outline:none; border-color:var(--border-strong);}
+
+/* ==========================================================================
+   A24-style cinematic hero — homepage only. Truly full-bleed: 100% of the
+   viewport's width AND height (100dvh, with a 100vh fallback for browsers
+   that don't support dvh) on every device, not a fixed vh fraction, so it
+   always fills the whole screen edge-to-edge no matter the device. Photo
+   per headline (crossfades on hover on desktop / snaps into view on scroll
+   on mobile — see the MOBILE note below), 3 headlines total, each from a
+   DIFFERENT category (see pick_hero() in refresh.py — it skips anything
+   without a real photo and anything whose category is already used by an
+   earlier pick, so the hero never shows 3 headlines from the same section
+   and never a headline with no image), headline stack bottom-left, 12F
+   wordmark simply centered in the topbar (the theme toggle and search
+   button that used to flank it here now live below the hero instead — see
+   .masthead-utility further down — so the topbar is just the wordmark and
+   needs no special centering trick), a live band along the very bottom
+   edge (desktop AND mobile) with NO background of its own — it sits
+   directly on the photo so it always matches the hero image natively.
+   The hero's photo/headline/logo chrome stays always-dark (white text over
+   photo) regardless of the site-wide light/dark toggle — same precedent as
+   the ticker/cover-art above, so hardcoded white/rgba colors are used here
+   on purpose instead of the theme custom properties. Since the toggle now
+   lives outside the hero entirely (below it, in .masthead-utility), this
+   is automatically true rather than something that has to be specially
+   guarded against — there's no theme-aware element inside .a24-hero left
+   to accidentally react to the toggle.
+   Darkening over the photo is a single FLAT, uniform tint (.hero-scrim) —
+   no gradient anywhere in the hero, so there's never a visible fade or
+   band from top to bottom or edge to edge, just a consistent cinematic
+   color-grade plus a faint film-grain texture. Legibility for the headline
+   stack and the 12F wordmark comes from a text-shadow halo on each — kept
+   deliberately TIGHT (small blur radius) so the letterforms themselves
+   stay crisp and sharp-edged rather than looking hazy/glowing; the grain
+   and tint only ever touch the photo behind the text, never the text
+   itself (text paints in a later, higher stacking layer than the scrim).
+   The live band is the one exception that IS adaptive: it has no
+   background of its own at all — not flat, not gradient — it sits
+   directly on the raw photo, and its text auto-swaps between white and
+   black depending on the live-measured brightness of the photo behind it
+   (see .hero-ticker.light-bg and the contrast-detection script in
+   index.html), with its own text-shadow halo for legibility instead of
+   any tinted box.
+   MOBILE (<=900px) swaps to a completely different presentation: a
+   vertical snap-scroll of exactly 3 full-height slides, one per headline
+   (see .hero-mobile / .hero-mslide below), built client-side from this
+   same server-rendered bg-layer/hero-title-item data — refresh.py and the
+   AUTO:HERO_* markers stay the single source of truth; index.html's hero
+   script just reshapes that same data into slides for narrow viewports.
+   The topbar (logo/icons) and live band stay pinned in place across all 3
+   slides (they're siblings positioned over the scroll container, not
+   inside it), and a minimal "N | total" counter bottom-right tracks the
+   current slide as the visitor scrolls.
+   Populated server-side by refresh.py between the AUTO:HERO_* markers in
+   index.html; updates automatically every hour. */
+.a24-hero{
+  position:relative;
+  width:100%;
+  /* The hero now sits directly at the top of the page (the old sticky
+     "always-on live band" above it has been removed entirely), so it
+     fills the full viewport with no offset needed. */
+  height:100vh;
+  height:100dvh;
+  min-height:480px;
+  overflow:hidden;
+  background:#0A0A0E;
+  color:#F5F4EF;
+  /* Shared film-grain texture, reused by both the desktop .hero-scrim and
+     each mobile .mslide-scrim so there's one definition of the "look". */
+  --hero-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.hero-bg{position:absolute; inset:0;}
+.bg-layer{
+  position:absolute; inset:0;
+  background-size:cover; background-position:center;
+  opacity:0;
+  transition:opacity .9s ease;
+}
+.bg-layer.active{opacity:1;}
+/* Flat, uniform "film" tint -- deliberately NOT a gradient, so the hero
+   never shows a visible fade/banding from top to bottom or edge to edge.
+   Same intensity everywhere, like a color-graded movie still, plus a very
+   faint grain texture for a filmic (not flat-digital) feel. Legibility for
+   the headline stack, the live band, and the topbar logo comes from
+   text-shadow halos on each of those elements individually (see
+   .hero-title-item, .hero-ticker, .hero-logo below) rather than from any
+   extra darkening here. */
+.hero-scrim{
+  position:absolute; inset:0;
+  background-color:rgba(9,10,15,0.34);
+  background-image:var(--hero-grain);
+  background-repeat:repeat;
+  background-size:140px 140px;
+  background-blend-mode:overlay;
+  pointer-events:none;
+}
+
+/* Theme toggle + search used to live in here too (left/right of the
+   wordmark, using their equal 38px-circle width to keep it centered); they
+   now live below the hero in .masthead-utility instead (see that block
+   further down), so the toggle only ever touches the page below the hero
+   and never the hero's own always-dark chrome. The topbar is just the
+   centered 12F wordmark now, so a simple center alignment is all it needs. */
+.hero-topbar{
+  position:absolute; top:0; left:0; right:0; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px clamp(16px,4vw,40px);
+}
+.hero-logo{
+  font-size:15px; font-weight:600; letter-spacing:.34em; color:#F5F4EF;
+  text-shadow:0 1px 3px rgba(0,0,0,0.8), 0 2px 12px rgba(0,0,0,0.55);
+  pointer-events:none;
+}
+
+.hero-body{
+  position:absolute; z-index:5; left:0; right:0; bottom:46px;
+  display:flex; align-items:flex-end; justify-content:flex-start;
+  padding:0 clamp(16px,4vw,40px);
+}
+
+.hero-titles{display:flex; flex-direction:column; gap:2px; max-width:74%;}
+.hero-title-item{
+  display:flex; align-items:baseline; gap:12px;
+  padding:7px 0;
+  font-family:'Newsreader', serif; font-weight:700;
+  font-size:clamp(19px,2.7vw,34px); line-height:1.12;
+  /* All three headlines are always solid white -- no dimmed/grey "inactive"
+     state. Which photo is currently showing already tells you which
+     headline is active; the text itself doesn't need to change color to
+     communicate that. Legibility comes from this text shadow alone, kept
+     TIGHT (small blur radius, no soft outer glow, no gradient) so the
+     letterforms stay crisp and sharp-edged rather than hazy. */
+  color:#F5F4EF;
+  text-shadow:0 1px 2px rgba(0,0,0,0.85);
+  cursor:pointer;
+}
+.hero-title-item .ht-text{display:inline-block; transition:opacity .2s ease;}
+/* Hovering a title dims the headline text itself slightly -- a light
+   "pressed/interactive" cue that it's hoverable and currently driving the
+   background swap -- while the small kicker tag brightens independently
+   below, so the two hover effects don't compound (the tag lives in its own
+   span, not affected by the text's opacity). */
+.hero-title-item:hover .ht-text{opacity:0.78;}
+.hero-title-item .ht-tag{
+  font-size:10px; font-weight:600; letter-spacing:.14em;
+  color:rgba(245,244,237,0.68); text-transform:uppercase;
+  text-shadow:0 1px 2px rgba(0,0,0,0.85);
+  transition:opacity .25s ease;
+  white-space:nowrap;
+}
+/* Hover/active affordance on the kicker tag: it brightens to full white
+   (independent of the headline text's own opacity dim above). Which photo
+   is currently showing is the primary cue for which headline is "active". */
+.hero-title-item.active .ht-tag, .hero-title-item:hover .ht-tag{color:#F5F4EF;}
+
+/* Live band, built directly into the hero photo -- it has NO background of
+   its own (no box, no tint) so it always matches whatever the current hero
+   image looks like natively. Runs along the very bottom edge of the hero,
+   below the headline stack, on desktop AND mobile. Reuses the .ticker-tag /
+   .ticker-dot / .ticker-track / .ticker-item styles above, scoped and
+   re-themed for sitting straight on a photo. Default assumes a dark photo
+   (white text with a soft dark halo for legibility); the .light-bg
+   modifier (toggled by JS once it's measured the current photo's
+   brightness) flips the text to black with a soft light halo instead, so
+   it stays readable over a light or white photo too -- contrast comes
+   entirely from the text itself, never from a background tint. */
+.hero-ticker{
+  position:absolute; z-index:5; left:0; right:0; bottom:0;
+  display:flex; align-items:center;
+  height:38px;
+  padding:0 clamp(16px,4vw,40px);
+  overflow:hidden;
+  white-space:nowrap;
+  background:none;
+}
+.hero-ticker .ticker-tag{
+  padding:0 12px 0 0; background:none; border-right:1px solid rgba(255,255,255,0.3);
+  color:#FF6B6B; margin-right:12px;
+  text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 9px rgba(0,0,0,0.55);
+  transition:border-color .35s ease, color .35s ease, text-shadow .35s ease;
+}
+.hero-ticker .ticker-track{padding-left:0; gap:40px;}
+.hero-ticker .ticker-item{
+  color:rgba(245,244,237,0.9); font-size:12px;
+  text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 9px rgba(0,0,0,0.55);
+  transition:color .35s ease, text-shadow .35s ease;
+}
+.hero-ticker .ticker-item b{color:#FFFFFF; text-shadow:inherit;}
+.hero-ticker .ticker-item .src{color:rgba(245,244,237,0.65); text-shadow:inherit;}
+.hero-ticker .ticker-item:hover{color:#FFFFFF;}
+
+.hero-ticker.light-bg .ticker-tag{
+  color:#C4302B; border-right-color:rgba(20,20,20,0.3);
+  text-shadow:0 1px 3px rgba(255,255,255,0.9), 0 0 9px rgba(255,255,255,0.6);
+}
+.hero-ticker.light-bg .ticker-item{
+  color:rgba(20,20,20,0.88);
+  text-shadow:0 1px 3px rgba(255,255,255,0.9), 0 0 9px rgba(255,255,255,0.6);
+}
+.hero-ticker.light-bg .ticker-item b{color:#0A0A0A; text-shadow:inherit;}
+.hero-ticker.light-bg .ticker-item .src{color:rgba(20,20,20,0.62); text-shadow:inherit;}
+.hero-ticker.light-bg .ticker-item:hover{color:#0A0A0A;}
+
+/* Once the user scrolls past the hero (desktop and mobile alike), the SAME
+   live-band element un-docks from the bottom of the hero photo and re-docks
+   as a sticky bar pinned to the very top of the viewport -- toggled via the
+   .pinned class (see the scroll-tracking script further down). Unlike the
+   docked-on-a-photo state above (which needs the brightness-driven
+   .light-bg swap for legibility), the pinned bar sits on the plain site
+   background, so its colors just follow the normal light/dark theme
+   variables and invert automatically with the theme toggle -- no
+   brightness detection needed here. These rules are placed after the
+   .light-bg rules above so they win by source order if .light-bg happens
+   to still be set from whichever hero photo was last active. */
+.hero-ticker.pinned{
+  position:fixed; z-index:80; top:0; left:0; right:0; bottom:auto;
+  height:42px;
+  background:var(--bg-elev);
+  border-bottom:1px solid var(--border-strong);
+  box-shadow:0 12px 24px -12px rgba(var(--shadow-rgb),0.35);
+  transition:background-color .25s ease, border-color .25s ease;
+}
+.hero-ticker.pinned .ticker-tag{
+  color:var(--live); border-right-color:var(--border-strong); text-shadow:none;
+}
+.hero-ticker.pinned .ticker-item{color:var(--text-dim); text-shadow:none;}
+.hero-ticker.pinned .ticker-item b{color:var(--text); text-shadow:none;}
+.hero-ticker.pinned .ticker-item .src{color:var(--text-faint); text-shadow:none;}
+.hero-ticker.pinned .ticker-item:hover{color:var(--accent);}
+
+@media (max-width:900px){
+  .hero-ticker{height:32px; padding:0 16px;}
+  .hero-ticker .ticker-item{font-size:11px;}
+  .hero-ticker .ticker-item .src{display:none;}
+  .hero-ticker.pinned{height:38px;}
+}
+
+/* ---------- Mobile hero: vertical snap-scroll, 1 headline per slide ----------
+   Below 900px the hover-crossfade desktop hero (.hero-bg / .hero-scrim /
+   .hero-body) is swapped out for .hero-mobile: a full-bleed vertical
+   snap-scroll of exactly 3 slides (.hero-mslide), one per headline, built
+   client-side (see the hero script in index.html) from the exact same
+   server-rendered bg-layer + hero-title-item data -- nothing is duplicated
+   in the markup refresh.py outputs, this is purely a mobile presentation
+   layer over the same 3 items.
+   The topbar (logo/icons) and the live band stay exactly where they are in
+   the DOM -- siblings of .hero-mobile, not inside it -- so they render
+   pinned in place above the scrolling slides on every one of the 3 screens,
+   never scrolling away. A minimal "current | total" counter sits bottom-
+   right, updated as each slide crosses into view. */
+@media (max-width:900px){
+  .hero-bg, .hero-scrim, .hero-body{display:none;}
+  .hero-mobile{
+    position:absolute; inset:0; z-index:1;
+    overflow-y:auto; overflow-x:hidden;
+    scroll-snap-type:y mandatory;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .hero-mobile::-webkit-scrollbar{display:none;}
+  .hero-mslide{
+    position:relative;
+    width:100%; height:100%;
+    scroll-snap-align:start;
+    scroll-snap-stop:always;
+  }
+  .mslide-bg{
+    position:absolute; inset:0;
+    /* Full-screen 100vh slides crop hero photos far more aggressively along
+       the vertical axis than the wider desktop hero ever does, so a plain
+       center crop regularly cuts off faces/heads in portrait-style news
+       photography. Biasing the focal point up toward the top third (20%
+       instead of 50%) keeps faces and other key subjects -- which are far
+       more often framed high in the shot than dead-center or low -- in
+       frame on narrow screens, the same way a film still gets reframed for
+       a different aspect ratio without losing its subject. */
+    background-size:cover; background-position:center 20%;
+  }
+  .mslide-scrim{
+    position:absolute; inset:0;
+    background-color:rgba(9,10,15,0.34);
+    background-image:var(--hero-grain);
+    background-repeat:repeat;
+    background-size:140px 140px;
+    background-blend-mode:overlay;
+    pointer-events:none;
+  }
+  .mslide-title{
+    position:absolute; left:0; right:66px; bottom:44px;
+    padding:0 16px;
+    display:block;
+    font-family:'Newsreader', serif; font-weight:700;
+    font-size:clamp(16px,4.6vw,21px); line-height:1.2;
+    color:#F5F4EF;
+    text-shadow:0 1px 2px rgba(0,0,0,0.85);
+  }
+  .mslide-title .ht-tag{
+    display:block; margin-top:6px;
+    font-size:10px; font-weight:600; letter-spacing:.14em;
+    color:rgba(245,244,237,0.72); text-transform:uppercase;
+    text-shadow:0 1px 2px rgba(0,0,0,0.85);
+  }
+  .hero-mobile-counter{
+    position:absolute; right:16px; bottom:44px; z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    font-size:11px; color:rgba(245,244,237,0.85);
+    text-shadow:0 1px 2px rgba(0,0,0,0.85);
+    pointer-events:none;
+  }
+  .hero-mobile-counter .hmc-bar{width:1px; height:14px; background:rgba(245,244,237,0.55);}
+}
+@media (min-width:901px){
+  .hero-mobile, .hero-mobile-counter{display:none;}
+}
