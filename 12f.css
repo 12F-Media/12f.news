@@ -919,6 +919,30 @@ footer .foot-copyright{font-weight:600; color:var(--text-dim);}
     overflow:hidden;
     touch-action:none;
   }
+  /* Belt-and-suspenders fix for a real Mobile Safari quirk: 100dvh on
+     .a24-hero (an in-flow, position:relative section) is usually enough,
+     but Safari recalculates dvh live as its address bar collapses/expands
+     on scroll/touch, and during that recalculation a normal in-flow
+     element can momentarily fall short of the true visual viewport,
+     exposing a sliver of whatever sits below the hero (the Live Feed) at
+     the bottom edge. Toggled on by the hero script (see
+     lockBody()/goTo() in index.html) for exactly as long as a visitor is
+     still on slide 1 or 2 -- the same window the body-level scroll lock
+     covers -- this takes the slider fully OUT of document flow and pins
+     it directly to the visual viewport instead, so it can't be affected
+     by the hero's own in-flow box being momentarily wrong. Reverts to the
+     plain in-flow .hero-mobile rule above the instant slide 3 releases,
+     so the page can scroll it away normally from there. */
+  .hero-mobile.viewport-locked{
+    position:fixed;
+    top:0; left:0;
+    width:100vw;
+    height:100dvh;
+    height:-webkit-fill-available;
+    min-height:-webkit-fill-available;
+    overflow:hidden;
+    z-index:999;
+  }
   /* Built client-side (see index.html): holds all 3 .hero-mslide elements
      stacked vertically, sized to total*100% of .hero-mobile's own height,
      and translated via `transform:translateY()` to bring the active slide
