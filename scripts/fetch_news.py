@@ -7,20 +7,13 @@ handful of sources whose RSS has been discontinued, a source's own free
 public JSON endpoint -- see FETCHERS below), sorts them into the site's
 existing categories (politics / markets / christian / world / tech / sports /
 culture), and rewrites the static sections of index.html between AUTO:
-markers. Nothing here talks to any AI model or paid API by default -- it's
-plain RSS/JSON parsing plus deterministic templating, designed to run
-unattended, forever, on GitHub Actions' own schedule. The one opt-in
-exception is Cloudinary (see the "Hero-only smart cropping" section below):
-a third-party paid-tier-capable API used ONLY to face-crop the 3 Hero
-photos, and only when CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/
-CLOUDINARY_API_SECRET are present in the environment -- with no credentials
-configured, this script's behavior (and its "no paid API" property) is
-unchanged from before.
+markers. Nothing here talks to any AI model or paid API -- it's plain
+RSS/JSON parsing plus deterministic templating, designed to run unattended,
+forever, on GitHub Actions' own schedule.
 
 If a feed is down or returns nothing, that source is just skipped for this
 run -- we never let one flaky feed break the whole refresh.
 """
-import hashlib
 import html
 import json
 import os
@@ -33,18 +26,6 @@ import unicodedata
 from datetime import datetime, timezone, timedelta
 
 import feedparser
-
-# Optional, opt-in only -- see "Hero-only smart cropping via Cloudinary"
-# further down. Importing this here (rather than inline, right before use)
-# means a missing/outdated `cloudinary` package fails loudly and immediately
-# at startup instead of silently mid-run; CLOUDINARY_ENABLED below is what
-# actually gates whether any of it is used.
-try:
-    import cloudinary
-    import cloudinary.uploader
-    _CLOUDINARY_LIB_AVAILABLE = True
-except ImportError:
-    _CLOUDINARY_LIB_AVAILABLE = False
 
 # Hard cap on every network call this script makes. feedparser has no
 # per-request timeout of its own -- without this, a single slow or
@@ -771,60 +752,34 @@ def pick_photo_priority(pool, n, used):
     return out
 
 
-def title_case(s):
-    """Capitalize the first letter of every word -- used only for the hero's
-    display headline; every other rendering of a story's title keeps its
-    original casing exactly as clean_text() produced it."""
-    return " ".join(w[:1].upper() + w[1:] if w else w for w in s.split(" "))
-
-
 # ---------------------------------------------------------------------------
-# Article + Hero media quality guardrails
+# Article media quality guardrails
 # ---------------------------------------------------------------------------
-# Two tiers of the same idea. Every article's image slot (lead story,
-# sub-stories, category cards, Markets, Christian World News) runs through
-# pick_best_image() below: given every candidate URL a feed entry offered
-# (see extract_all_images() above), it discards obvious placeholders/
-# tracking pixels and -- whenever an entry actually offered more than one
-# real candidate -- measures each one's real resolution and keeps the
-# highest, falling straight through to the next candidate whenever one
-# turns out too small to be worth it. No aspect-ratio requirement here,
-# since every other image box on the site shows the full photo uncropped
-# (object-fit:contain, see 12f.css) rather than pushing into it, so a
-# portrait or square photo is exactly as usable as a landscape one -- only
-# resolution matters at this tier.
-# The Hero is the single largest, highest-visibility image on the page (a
-# full-bleed background behind the top headlines) and additionally gets
-# pushed through a real face-aware crop (see "Hero-only smart cropping via
-# Cloudinary" further below), so it holds every candidate to a stricter bar
-# on top of the general one above: real measured resolution AND a
-# landscape-friendly aspect ratio, applied inside pick_hero() below.
+# Every article's image slot (lead story, sub-stories, category cards,
+# Markets, Christian World News) runs through pick_best_image() below:
+# given every candidate URL a feed entry offered (see extract_all_images()
+# above), it discards obvious placeholders/tracking pixels and -- whenever
+# an entry actually offered more than one real candidate -- measures each
+# one's real resolution and keeps the highest, falling straight through to
+# the next candidate whenever one turns out too small to be worth it. No
+# aspect-ratio requirement here, since every image box on the site shows
+# the full photo uncropped (object-fit:contain, see 12f.css) rather than
+# pushing into it, so a portrait or square photo is exactly as usable as a
+# landscape one -- only resolution matters.
 
 ARTICLE_MIN_WIDTH = 200
 ARTICLE_MIN_HEIGHT = 150
-ARTICLE_MAX_PROBES_PER_RUN = 90  # same reasoning as HERO_MAX_PROBES_PER_RUN
-                                  # below, just a larger budget since this
-                                  # tier runs across every article in a run,
-                                  # not just 3 hero candidates. Shared,
-                                  # mutable, reset once per collect_all()
-                                  # call (see _ARTICLE_PROBE_BUDGET).
+ARTICLE_MAX_PROBES_PER_RUN = 90  # hard cap on how many candidate images
+                                  # this run will actually download to
+                                  # measure, so a run with lots of
+                                  # low-quality candidates in a row can't
+                                  # stall the hourly refresh chasing image
+                                  # dimensions the way a slow feed could.
 
-# Shared, mutable single-element counter -- see pick_best_image() and
-# hero_image_quality_ok()'s own probe_budget for the same pattern. Reset to
+# Shared, mutable single-element counter -- see pick_best_image(). Reset to
 # ARTICLE_MAX_PROBES_PER_RUN at the top of every collect_all() call so each
 # hourly run gets a fresh budget rather than draining across runs.
 _ARTICLE_PROBE_BUDGET = [ARTICLE_MAX_PROBES_PER_RUN]
-
-HERO_MIN_WIDTH = 640
-HERO_MIN_HEIGHT = 360
-HERO_MIN_ASPECT = 1.3  # landscape-ish -- roughly 4:3 or wider; excludes
-                       # portrait/square crops that would look zoomed-in
-                       # and cropped at full hero scale.
-HERO_MAX_PROBES_PER_RUN = 25  # hard cap on how many candidate images this
-                               # run will actually download to measure, so a
-                               # bad run (lots of low-quality candidates in a
-                               # row) can't stall the hourly refresh chasing
-                               # image dimensions the way a slow feed could.
 
 # Filename/path substrings that reliably indicate a generic fallback image
 # rather than a real photo -- sized/cropped article art almost never
@@ -856,8 +811,7 @@ def _parse_image_dimensions(data):
     library just to read a size header. Returns None for anything that
     doesn't parse as a recognized, complete header (truncated download,
     exotic format, etc.), which the caller treats as "couldn't verify" and
-    skips -- a hero slot only ever shows a photo this script actually
-    confirmed meets the bar."""
+    skips it rather than trusting an unmeasured image."""
     if not data:
         return None
     # PNG: 8-byte signature, then an IHDR chunk whose first 8 bytes of data
@@ -922,9 +876,9 @@ def _parse_image_dimensions(data):
 def probe_image_dimensions(url, timeout=8, max_bytes=300_000):
     """Downloads just enough of an image's bytes to read its dimensions from
     the format's own header (see _parse_image_dimensions) -- never the whole
-    file -- so checking a hero candidate that turns out to be too small or
-    the wrong shape stays cheap. Returns None on any failure (network error,
-    unrecognized format, truncated header)."""
+    file -- so checking a candidate that turns out to be too small stays
+    cheap. Returns None on any failure (network error, unrecognized format,
+    truncated header)."""
     import urllib.request
     try:
         req = urllib.request.Request(url, headers={
@@ -949,8 +903,7 @@ def pick_best_image(urls, budget):
     photo (looks_like_placeholder() -- generic fallbacks, tracking pixels,
     bare icons/logos) at zero network cost. If more than one real candidate
     is left, downloads just enough of each to measure its actual
-    resolution (same header-only probe_image_dimensions() the Hero tier
-    uses) and keeps the highest-resolution one that clears
+    resolution and keeps the highest-resolution one that clears
     ARTICLE_MIN_WIDTH/HEIGHT -- so a small thumbnail a feed happened to
     list first never wins over a full-size photo listed second or third.
     `budget` is a shared, mutable single-element counter (see
@@ -994,240 +947,6 @@ def pick_best_image(urls, budget):
 
     return best_url if best_url is not None else candidates[0]
 
-
-_hero_image_quality_cache = {}
-
-
-def hero_image_quality_ok(url, budget):
-    """Combines the placeholder-filename check with a real, measured
-    resolution + aspect-ratio check against HERO_MIN_WIDTH/HEIGHT/ASPECT.
-    `budget` is a single-element list used as a mutable counter shared
-    across one pick_hero() call, decremented once per actual network probe
-    so a run with many low-quality candidates in a row still finishes in
-    bounded time (HERO_MAX_PROBES_PER_RUN) instead of probing the entire
-    pool. Results are cached per URL for the run's lifetime since the same
-    photo can legitimately turn up more than once."""
-    if not url or looks_like_placeholder(url):
-        return False
-    if url in _hero_image_quality_cache:
-        return _hero_image_quality_cache[url]
-    if budget[0] <= 0:
-        return False  # out of probe budget -- treat as unverified, skip it
-    budget[0] -= 1
-    dims = probe_image_dimensions(url)
-    ok = False
-    if dims:
-        w, h = dims
-        if w >= HERO_MIN_WIDTH and h >= HERO_MIN_HEIGHT and h > 0 and (w / h) >= HERO_MIN_ASPECT:
-            ok = True
-    _hero_image_quality_cache[url] = ok
-    return ok
-
-
-# ---------------------------------------------------------------------------
-# Hero-only smart cropping via Cloudinary (fully optional -- see the module
-# docstring's disclosure at the top of this file). Applies ONLY to the 3
-# Hero candidate photos; every other image on the site (Top Stories,
-# sub-stories, category grids, Markets, Christian World News) keeps showing
-# the full uncropped stock photo via object-fit:contain (see 12f.css) per an
-# earlier, explicit "don't crop the main site" instruction. The Hero is the
-# one full-bleed background photo on the page where a bad, awkward crop
-# (a half-head, an isolated ear, a chopped forehead) is most visible, which
-# is what this section exists to prevent.
-#
-# Credentials are read from the environment ONLY -- never hardcoded here,
-# never requested in chat -- so they can be set as GitHub Actions repo
-# secrets (CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET)
-# without ever touching this file or the repo. Whenever any of the three is
-# missing (or the `cloudinary` package itself isn't installed), CLOUDINARY_
-# ENABLED is False and this script's behavior is byte-for-byte identical to
-# before this feature existed -- pick_hero() just uses hero_image_quality_ok()
-# alone, same as it always has.
-# ---------------------------------------------------------------------------
-
-CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
-CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
-CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
-
-CLOUDINARY_ENABLED = bool(
-    _CLOUDINARY_LIB_AVAILABLE
-    and CLOUDINARY_CLOUD_NAME
-    and CLOUDINARY_API_KEY
-    and CLOUDINARY_API_SECRET
-)
-
-if CLOUDINARY_ENABLED:
-    cloudinary.config(
-        cloud_name=CLOUDINARY_CLOUD_NAME,
-        api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET,
-        secure=True,
-    )
-else:
-    print(
-        "INFO: Cloudinary not configured (CLOUDINARY_CLOUD_NAME / "
-        "CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET not all set in the "
-        "environment, or the `cloudinary` package isn't installed) -- hero "
-        "photos will use their plain source image with no face-aware crop, "
-        "exactly like before this feature existed. See CLOUDINARY_SETUP.md "
-        "(delivered alongside this script) to enable it.",
-        file=sys.stderr,
-    )
-
-# Two independent target crops per hero photo -- the desktop hero is a wide
-# full-bleed landscape band and the mobile hero is a full-bleed portrait
-# slide (see .a24-hero / .hero-mobile in 12f.css), and one fixed crop can't
-# serve both without either leaving bars on one or cutting off the subject
-# on the other.
-HERO_DESKTOP_CROP = {"width": 1600, "height": 900, "crop": "fill", "gravity": "face"}
-HERO_MOBILE_CROP = {"width": 900, "height": 1200, "crop": "fill", "gravity": "face"}
-
-_cloudinary_face_cache = {}
-
-
-def cloudinary_hero_crop(image_url):
-    """Uploads a hero candidate photo to Cloudinary (idempotently -- see
-    public_id below) with face detection turned on, and returns
-    {"desktop": url, "mobile": url} -- two separately-sized, face-centered
-    crops built from that upload -- or None if Cloudinary isn't configured,
-    the upload/API call fails for any reason (network hiccup, malformed
-    image, rate limit -- this must never take down the whole hourly
-    refresh), or, per spec, no face was actually detected in the photo. In
-    every None case the caller (pick_hero()) treats this candidate as not
-    having a qualifying human subject and moves on to the next one.
-    The upload flow (not Cloudinary's URL-based fetch delivery) is used
-    specifically because it's the only way to get real face-detection
-    metadata back synchronously -- both to build an accurate gravity="face"
-    crop AND to implement the "skip this article's photo if it has no
-    qualifying subject" fallback the spec asks for. public_id is a stable
-    hash of the source URL, so re-running this every hour against a story
-    that stays in the hero-candidate pool across runs reuses the
-    already-uploaded asset (overwrite=False) instead of re-uploading and
-    re-billing the same photo every time."""
-    if not CLOUDINARY_ENABLED or not image_url:
-        return None
-    if image_url in _cloudinary_face_cache:
-        return _cloudinary_face_cache[image_url]
-
-    public_id = "12f-hero/" + hashlib.sha1(image_url.encode("utf-8")).hexdigest()[:20]
-    result = None
-    try:
-        upload_result = cloudinary.uploader.upload(
-            image_url,
-            public_id=public_id,
-            overwrite=False,
-            unique_filename=False,
-            faces=True,
-            type="upload",
-        )
-        faces = upload_result.get("faces") or []
-        if faces:
-            desktop_url = cloudinary.CloudinaryImage(public_id).build_url(secure=True, **HERO_DESKTOP_CROP)
-            mobile_url = cloudinary.CloudinaryImage(public_id).build_url(secure=True, **HERO_MOBILE_CROP)
-            result = {"desktop": desktop_url, "mobile": mobile_url}
-        # else: upload succeeded but no face was detected -- result stays
-        # None, which tells pick_hero() to skip this candidate entirely.
-    except Exception as ex:
-        print(f"WARN: Cloudinary crop failed for {image_url}: {ex}", file=sys.stderr)
-        result = None
-
-    _cloudinary_face_cache[image_url] = result
-    return result
-
-
-def pick_hero(pool, used, n=3):
-    """Top N (3, both on desktop and mobile) stories from the diversified
-    top_pool that actually have a usable photo, in the pool's existing
-    top-first order -- with the added constraint that every pick must come
-    from a DIFFERENT category than the ones already picked, so the hero
-    never shows e.g. three Business stories back to back. Marks each pick
-    into the shared `used` dedup set (same as pick()/pick_with_image()
-    above) and skips anything already in it -- a hero headline must never
-    also show up in Top Stories, a category grid, the ticker, or the wire
-    further down the page. Called before any other pick against top_pool
-    (see main()) so the hero gets first choice and everything else
-    naturally excludes it.
-    An article with no photo is simply skipped -- never used as a hero
-    headline -- per spec; the next candidate (regardless of category) is
-    tried instead so a hero slot is never left empty just because the
-    first photo-less story in line got passed over. Beyond just "has a
-    photo", every candidate's image also has to clear the media quality
-    guardrail (hero_image_quality_ok(), above): real measured resolution
-    and a landscape-friendly aspect ratio, and not a generic/placeholder
-    fallback image -- the hero is the single biggest photo on the page, so
-    it's held to a higher bar than a thumbnail-sized card elsewhere on the
-    site.
-    When Cloudinary is configured (CLOUDINARY_ENABLED), every candidate that
-    clears the resolution/aspect-ratio bar above is additionally run through
-    cloudinary_hero_crop(), which uploads it with face detection on and
-    returns face-centered desktop/mobile crops -- or None if no human
-    subject was actually detected in the photo, per the "clear subject,
-    properly framed, no half-heads" spec. A candidate with no detected face
-    is skipped here exactly like a too-small or placeholder image would be,
-    and the next candidate (regardless of category) is tried instead, so the
-    Hero automatically falls through to the next-best article with a
-    qualifying subject photo rather than ever showing a badly-cropped one.
-    Picks that DO pass get item["hero_crop"] = {"desktop": url, "mobile":
-    url} attached (on a shallow copy of the item, so the original in
-    top_pool/by_category is left untouched) for render_hero() to use.
-    If the pool genuinely doesn't contain n distinct categories with a
-    qualifying photo (or the probe budget runs out first), fewer than n
-    items come back (render_hero() simply renders however many were
-    found)."""
-    out = []
-    seen_categories = set()
-    probe_budget = [HERO_MAX_PROBES_PER_RUN]
-    for item in pool:
-        if item["url"] in used:
-            continue
-        if not hero_image_quality_ok(item.get("image"), probe_budget):
-            continue
-        cat = item.get("category")
-        if cat in seen_categories:
-            continue
-        if CLOUDINARY_ENABLED:
-            hero_crop = cloudinary_hero_crop(item.get("image"))
-            if hero_crop is None:
-                continue  # no qualifying human subject detected -- try the next candidate
-            item = dict(item, hero_crop=hero_crop)
-        out.append(item)
-        seen_categories.add(cat)
-        used.add(item["url"])
-        if len(out) >= n:
-            break
-    return out
-
-
-def render_hero(items):
-    """Renders the two independently-templated pieces of the cinematic
-    hero -- background photo layers and the headline stack -- each wired to
-    the same story index so hovering (desktop) or scrolling (mobile) swaps
-    the matching photo (see the hero script in index.html). Headlines are
-    Title Cased for hero display only; every other rendering of the same
-    story elsewhere on the page keeps its original casing.
-    When an item carries a hero_crop (see pick_hero()/cloudinary_hero_crop()
-    above), the desktop background-image uses the Cloudinary-cropped,
-    face-centered desktop image instead of the plain source photo, and a
-    data-mobile-bg attribute carrying the separately-cropped portrait
-    version is added for index.html's mobile-slide-building JS to prefer
-    over the desktop crop. Items with no hero_crop (Cloudinary disabled, or
-    this candidate predates the feature) fall back to the plain source
-    image for both, exactly as before this feature existed."""
-    bg_parts, title_parts = [], []
-    for i, item in enumerate(items):
-        active = " active" if i == 0 else ""
-        crop = item.get("hero_crop")
-        img = esc(crop["desktop"]) if crop else esc(item["image"])
-        mobile_attr = f' data-mobile-bg="{esc(crop["mobile"])}"' if crop else ""
-        tag = esc((item.get("lean") or CAT_KICKER.get(item["category"], "")).upper())
-        headline = esc(title_case(item["title"]))
-        url = esc(item["url"])
-        bg_parts.append(f'<div class="bg-layer{active}" data-i="{i}" style="background-image:url(\'{img}\');"{mobile_attr}></div>')
-        title_parts.append(
-            f'<a class="hero-title-item{active}" data-i="{i}" href="{url}" target="_blank" rel="noopener noreferrer">'
-            f'<span class="ht-text">{headline}</span><span class="ht-tag mono">{tag}</span></a>'
-        )
-    return "\n".join(bg_parts), "\n".join(title_parts)
 
 
 def diversify(pool, key=lambda it: it["source"]):
@@ -1334,13 +1053,6 @@ def main():
     # category or outlet happened to post most recently.
     top_pool = build_top_pool(by_category, ALL_CATEGORIES)
 
-    # Cinematic hero (3 headlines, desktop hover-swap / mobile snap-scroll,
-    # see index.html's .a24-hero) gets first choice against top_pool, same
-    # as lead_item below -- picked here, before anything else, so the rest
-    # of the page naturally excludes whatever the hero used via the shared
-    # `used` set.
-    hero_items = pick_hero(top_pool, used, 3)
-
     lead_item = pick_with_image(top_pool, used)
     lead = [lead_item] if lead_item else []
     # Sub-stories render a photo box next to the headline whenever the item
@@ -1397,11 +1109,6 @@ def main():
         sys.exit(1)
 
     html_text = open(INDEX_PATH, encoding="utf-8").read()
-
-    if hero_items:
-        hero_bg_html, hero_titles_html = render_hero(hero_items)
-        html_text = replace_between(html_text, "<!-- AUTO:HERO_BG_START -->", "<!-- AUTO:HERO_BG_END -->", hero_bg_html)
-        html_text = replace_between(html_text, "<!-- AUTO:HERO_TITLES_START -->", "<!-- AUTO:HERO_TITLES_END -->", hero_titles_html)
 
     briefing_html = "\n".join(render_briefing_item(it) for it in briefing) if briefing else html_text
     if briefing:
