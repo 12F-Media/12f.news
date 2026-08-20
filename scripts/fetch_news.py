@@ -516,20 +516,29 @@ def backfill_from_archive(by_category, archive, min_count=8):
     top it up with the most recent archived items for that category so the
     section/tab never goes empty just because one source had a bad hour.
     Archived items used this way are tagged backfilled=True so downstream
-    selection can treat them as lower priority than genuinely fresh ones."""
+    selection can treat them as lower priority than genuinely fresh ones.
+
+    Candidates are taken newest-first (archive is already sorted that way),
+    but photo-bearing ones are drawn from that recency-ordered list before
+    photo-less ones -- same photo-first principle as pick_photo_priority()
+    applies here too, so a degraded-feed hour doesn't quietly starve a
+    category's photo cards just because backfill filled its slots without
+    regard for which archived items actually had an image."""
     for cat, items in by_category.items():
         fresh_count = len(items)
         if fresh_count >= min_count:
             continue
         have = {it["url"] for it in items}
         needed = min_count - fresh_count
-        added = 0
+        with_image, without_image = [], []
         for a in archive:
-            if added >= needed:
-                break
             if a["category"] != cat or a["url"] in have:
                 continue
             have.add(a["url"])
+            (with_image if a.get("image") else without_image).append(a)
+        chosen = (with_image + without_image)[:needed]
+        added = 0
+        for a in chosen:
             items.append({
                 "source": a["source"], "domain": a["domain"], "bias": a["bias"],
                 "lean": SOURCES.get(a["source"], {}).get("lean", {}).get(cat, CAT_KICKER.get(cat, "")),
@@ -976,6 +985,33 @@ def diversify(pool, key=lambda it: it["source"]):
     return out
 
 
+def render_grid_body(items, now):
+    """Renders a list of items in flat-item form, showing the real, fitted
+    photo-card treatment (render_flat_item(with_photo=True) -- a WSJ-style
+    featured card, cropped to fill its frame -- see the .flat-grid
+    object-fit:cover rules in 12f.css) for roughly 30% of the items that
+    actually have a usable image, instead of only the very first one.
+    Photo-bearing items are already front-loaded by pick_photo_priority() at
+    selection time, so walking the list in order and greedily claiming the
+    photo-card slots naturally picks the freshest photo-bearing articles
+    first. An article with no image is never given one -- it just falls
+    through to the smaller thumb/text layouts in render_flat_item(), and if
+    a category doesn't have enough real photos to hit the 30% target, this
+    caps out at however many it actually has rather than padding further
+    down the list with images that don't exist."""
+    if not items:
+        return ""
+    photo_target = max(1, round(len(items) * 0.3))  # ~30%, at least 1
+    photo_slots = 0
+    parts = []
+    for it in items:
+        show_photo = bool(it["image"]) and photo_slots < photo_target
+        if show_photo:
+            photo_slots += 1
+        parts.append(render_flat_item(it, now, with_photo=show_photo))
+    return "\n".join(parts)
+
+
 def render_cat_grid(cat, items, now):
     """A single category's full, dedicated card grid -- lives hidden inside
     the lead column and is revealed (in place of the mixed top-stories feed)
@@ -986,10 +1022,7 @@ def render_cat_grid(cat, items, now):
     nor a story that's already been shown elsewhere on the page."""
     if not items:
         return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}"></div>'
-    body = render_flat_item(items[0], now, with_photo=True)
-    for it in items[1:]:
-        body += "\n" + render_flat_item(it, now)
-    return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}">\n{body}\n      </div>'
+    return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}">\n{render_grid_body(items, now)}\n      </div>'
 
 
 def render_explore_list(items, now):
@@ -1127,16 +1160,10 @@ def main():
     html_text = replace_between(html_text, "<!-- AUTO:LEAD_START -->", "<!-- AUTO:LEAD_END -->", lead_html)
 
     if markets_items:
-        m_html = render_flat_item(markets_items[0], now, with_photo=True)
-        for it in markets_items[1:]:
-            m_html += "\n" + render_flat_item(it, now)
-        html_text = replace_between(html_text, "<!-- AUTO:MARKETS_START -->", "<!-- AUTO:MARKETS_END -->", m_html)
+        html_text = replace_between(html_text, "<!-- AUTO:MARKETS_START -->", "<!-- AUTO:MARKETS_END -->", render_grid_body(markets_items, now))
 
     if christian_items:
-        c_html = render_flat_item(christian_items[0], now, with_photo=True)
-        for it in christian_items[1:]:
-            c_html += "\n" + render_flat_item(it, now)
-        html_text = replace_between(html_text, "<!-- AUTO:CHRISTIAN_START -->", "<!-- AUTO:CHRISTIAN_END -->", c_html)
+        html_text = replace_between(html_text, "<!-- AUTO:CHRISTIAN_START -->", "<!-- AUTO:CHRISTIAN_END -->", render_grid_body(christian_items, now))
 
     catgrids_html = "\n".join(render_cat_grid(c, cat_items.get(c, []), now) for c in ALL_CATEGORIES)
     html_text = replace_between(html_text, "<!-- AUTO:CATGRIDS_START -->", "<!-- AUTO:CATGRIDS_END -->", catgrids_html)
