@@ -619,43 +619,6 @@ def render_sub_story(item, now):
             f'      </article>')
 
 
-def render_flat_item(item, now, with_photo=False):
-    dek = truncate(item["summary"], 170) or "Read the full story at the source link below."
-    meta_time = format_meta_time(item["dt"], now)
-    today = "yes" if is_today(item["dt"], now) else "no"
-    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
-    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
-    ts = ts_of(item)
-    if with_photo and item["image"]:
-        return (f'<div class="flat-item flat-item-photo" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
-                f'        <div class="media"><img class="cover-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
-                f'referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'"><div class="photo-credit">Photo: via {esc(item["source"])}</div></div>\n'
-                f'        {byline}\n'
-                f'        <h3>{esc(item["title"])}</h3>\n'
-                f'        <p>{esc(dek)}</p>\n'
-                f'        {meta}\n'
-                f'      </div>')
-    thumb = f'<img class="thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' if item["image"] else ""
-    if thumb:
-        return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
-                f'        {byline}\n'
-                f'        <div class="story-row">\n'
-                f'          {thumb}\n'
-                f'          <div class="story-col">\n'
-                f'            <h3>{esc(item["title"])}</h3>\n'
-                f'            <p>{esc(dek)}</p>\n'
-                f'            {meta}\n'
-                f'          </div>\n'
-                f'        </div>\n'
-                f'      </div>')
-    return (f'<div class="flat-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts}">\n'
-            f'        {byline}\n'
-            f'        <h3>{esc(item["title"])}</h3>\n'
-            f'        <p>{esc(dek)}</p>\n'
-            f'        {meta}\n'
-            f'      </div>')
-
-
 def js_str(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
@@ -933,7 +896,16 @@ def pick_best_image(urls, budget):
     if not candidates:
         return urls[0]
     if len(candidates) == 1:
-        return candidates[0]
+        url = candidates[0]
+        # Nothing to rank it against, but it's still worth learning this
+        # image's shape (if the budget allows) -- render-time portrait
+        # handling (see is_portrait_image()) needs every hero-eligible
+        # photo's orientation, not just ones that had a sibling to compare
+        # against, and a single-candidate article is the common case.
+        if url not in _article_image_dims_cache and budget[0] > 0:
+            budget[0] -= 1
+            _article_image_dims_cache[url] = probe_image_dimensions(url)
+        return url
 
     best_url, best_area = None, -1
     for url in candidates:
@@ -956,6 +928,23 @@ def pick_best_image(urls, budget):
 
     return best_url if best_url is not None else candidates[0]
 
+
+def is_portrait_image(url):
+    """True only if we actually measured this image (via pick_best_image's
+    probing, cached in _article_image_dims_cache) and it's clearly taller
+    than it is wide -- a portrait source photo that a wide 16:9 hero box
+    would crop down to a sliver of, cutting off the subject's head or most
+    of the frame. Returns False (never None) when we don't have a
+    measurement -- probing failed, or the run's probe budget ran out --
+    since an unmeasured photo should still get the normal hero treatment
+    rather than being silently downgraded."""
+    if not url:
+        return False
+    dims = _article_image_dims_cache.get(url)
+    if not dims:
+        return False
+    w, h = dims
+    return h > w * 1.15
 
 
 def diversify(pool, key=lambda it: it["source"]):
@@ -985,31 +974,212 @@ def diversify(pool, key=lambda it: it["source"]):
     return out
 
 
-def render_grid_body(items, now):
-    """Renders a list of items in flat-item form, showing the real, fitted
-    photo-card treatment (render_flat_item(with_photo=True) -- a WSJ-style
-    featured card, cropped to fill its frame -- see the .flat-grid
-    object-fit:cover rules in 12f.css) for roughly 30% of the items that
-    actually have a usable image, instead of only the very first one.
-    Photo-bearing items are already front-loaded by pick_photo_priority() at
-    selection time, so walking the list in order and greedily claiming the
-    photo-card slots naturally picks the freshest photo-bearing articles
-    first. An article with no image is never given one -- it just falls
-    through to the smaller thumb/text layouts in render_flat_item(), and if
-    a category doesn't have enough real photos to hit the 30% target, this
-    caps out at however many it actually has rather than padding further
-    down the list with images that don't exist."""
+GROUP_A_CATEGORIES = {"politics", "markets", "christian"}
+# Every other category (world, tech, sports, culture) renders as Group B.
+# Deliberately procedural rather than one shared card template repeated
+# down the page -- see render_group_a()/render_group_b() below for why.
+
+
+def render_hero_fallback(item, now, dek_limit=180):
+    """Used instead of render_medium_hero()/render_split_hero()'s photo
+    treatment whenever the chosen image is portrait-oriented (see
+    is_portrait_image()) -- forcing a tall image into a wide 16:9 hero box
+    would crop away the subject's head or most of the frame, so a portrait
+    photo gets routed here instead: a left-aligned thumbnail (cropped far
+    less destructively at thumbnail size) next to the full headline/dek,
+    rather than a wide photo slot at all."""
+    dek = truncate(item["summary"], dek_limit) or "Read the full story at the source link below."
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    thumb = ""
+    if item["image"]:
+        thumb = f'<img class="thumb cg-hero-thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+    return (f'<div class="cg-block cg-hero-fallback" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'        {thumb}\n'
+            f'        <div class="chf-col">\n'
+            f'          {byline}\n'
+            f'          <h3>{esc(item["title"])}</h3>\n'
+            f'          <p>{esc(dek)}</p>\n'
+            f'          {meta}\n'
+            f'        </div>\n'
+            f'      </div>')
+
+
+def render_medium_hero(item, now):
+    """Group A's opening card: one medium, bounded photo (max-height:360px,
+    16:9, object-fit:cover -- see 12f.css) with a headline underneath.
+    A portrait-oriented image is routed to render_hero_fallback() instead
+    (see is_portrait_image())."""
+    if item["image"] and is_portrait_image(item["image"]):
+        return render_hero_fallback(item, now, dek_limit=170)
+    dek = truncate(item["summary"], 170) or "Read the full story at the source link below."
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    media = ""
+    if item["image"]:
+        media = (f'<div class="media"><img class="hero-medium-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
+                  f'referrerpolicy="no-referrer" onerror="this.closest(\'.media\').style.display=\'none\'">'
+                  f'<div class="photo-credit">Photo: via {esc(item["source"])}</div></div>')
+    return (f'<div class="cg-block cg-hero-medium" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'        {media}\n'
+            f'        {byline}\n'
+            f'        <h3>{esc(item["title"])}</h3>\n'
+            f'        <p>{esc(dek)}</p>\n'
+            f'        {meta}\n'
+            f'      </div>')
+
+
+def render_strip_item(item, now):
+    """One card in Group A's 3-across horizontal text strip -- headline
+    only, no image, no dek, so three fit side by side without crowding."""
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span></div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    return (f'<div class="cg-strip-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'          {byline}\n'
+            f'          <h4>{esc(item["title"])}</h4>\n'
+            f'          {meta}\n'
+            f'        </div>')
+
+
+def render_mixed_item(item, now, with_thumb):
+    """One card in Group A's closing 2-column grid -- alternates a small
+    thumbnail card with a text-only card (with_thumb picked by the caller),
+    same 1-thumb / 1-text-only rhythm the WSJ section fronts use."""
+    dek = truncate(item["summary"], 140) or "Read the full story at the source link below."
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span></div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    if with_thumb and item["image"]:
+        thumb = f'<img class="thumb" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+        return (f'<div class="cg-mixed-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+                f'          {byline}\n'
+                f'          <div class="story-row">\n'
+                f'            {thumb}\n'
+                f'            <div class="story-col">\n'
+                f'              <h3>{esc(item["title"])}</h3>\n'
+                f'              <p>{esc(dek)}</p>\n'
+                f'              {meta}\n'
+                f'            </div>\n'
+                f'          </div>\n'
+                f'        </div>')
+    return (f'<div class="cg-mixed-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'          {byline}\n'
+            f'          <h3>{esc(item["title"])}</h3>\n'
+            f'          <p>{esc(dek)}</p>\n'
+            f'          {meta}\n'
+            f'        </div>')
+
+
+def render_split_hero(item, now):
+    """Group B's opening card: headline + dek on the left, a bounded 16:9
+    photo (max-height:360px, object-fit:cover) on the right, side by side
+    instead of stacked -- the one place on a category tab where the photo
+    isn't the full-width lead element. A portrait-oriented image is routed
+    to render_hero_fallback() instead (see is_portrait_image())."""
+    if item["image"] and is_portrait_image(item["image"]):
+        return render_hero_fallback(item, now, dek_limit=200)
+    dek = truncate(item["summary"], 200) or "Read the full story at the source link below."
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span>{bias_meter(item["bias"])}</div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    media = ""
+    if item["image"]:
+        media = (f'<div class="chs-media"><img class="hero-split-photo" src="{esc(item["image"])}" alt="{esc(item["title"])}" '
+                  f'referrerpolicy="no-referrer" onerror="this.closest(\'.chs-media\').style.display=\'none\'"><div class="photo-credit">Photo: via {esc(item["source"])}</div></div>')
+    return (f'<div class="cg-block cg-hero-split" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'        <div class="chs-text">\n'
+            f'          {byline}\n'
+            f'          <h3>{esc(item["title"])}</h3>\n'
+            f'          <p>{esc(dek)}</p>\n'
+            f'          {meta}\n'
+            f'        </div>\n'
+            f'        {media}\n'
+            f'      </div>')
+
+
+def render_dense_item(item, now, with_thumb):
+    """One row in Group B's dense headline list -- compact, no dek, an
+    occasional small thumbnail rather than a photo on every row."""
+    meta_time = format_meta_time(item["dt"], now)
+    today = "yes" if is_today(item["dt"], now) else "no"
+    byline = f'<div class="byline"><span class="source-tag">{esc(item["source"])}</span><span class="lean">{esc(item["lean"])}</span></div>'
+    meta = f'<div class="meta"><span class="mono">{esc(meta_time)}</span><a href="{esc(item["url"])}" target="_blank" rel="noopener noreferrer">{esc(item["domain"])} ↗</a></div>'
+    if with_thumb and item["image"]:
+        thumb = f'<img class="thumb thumb-sm" src="{esc(item["image"])}" alt="{esc(item["title"])}" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+        return (f'<div class="cg-dense-item" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+                f'          {thumb}\n'
+                f'          <div class="cg-dense-col">\n'
+                f'            {byline}\n'
+                f'            <h4>{esc(item["title"])}</h4>\n'
+                f'            {meta}\n'
+                f'          </div>\n'
+                f'        </div>')
+    return (f'<div class="cg-dense-item cg-dense-item--text" data-cat="{item["category"]}" data-today="{today}" data-ts="{ts_of(item)}">\n'
+            f'          {byline}\n'
+            f'          <h4>{esc(item["title"])}</h4>\n'
+            f'          {meta}\n'
+            f'        </div>')
+
+
+def render_group_a(items, now):
+    """Politics / Markets / Christian World News: medium hero -> 3-across
+    text strip -> 2-column mixed grid (alternating thumb / text-only). Each
+    block is its own full-width row (.cg-block spans the outer .flat-grid's
+    columns -- see 12f.css) so the inner strip/grid layouts are free to use
+    their own column counts independent of the outer grid."""
     if not items:
         return ""
-    photo_target = max(1, round(len(items) * 0.3))  # ~30%, at least 1
-    photo_slots = 0
-    parts = []
-    for it in items:
-        show_photo = bool(it["image"]) and photo_slots < photo_target
-        if show_photo:
-            photo_slots += 1
-        parts.append(render_flat_item(it, now, with_photo=show_photo))
+    hero = render_medium_hero(items[0], now)
+    rest = items[1:]
+    strip_items, grid_items = rest[:3], rest[3:]
+    parts = [hero]
+    if strip_items:
+        strip_body = "\n".join(render_strip_item(it, now) for it in strip_items)
+        parts.append(f'      <div class="cg-block cg-strip">\n{strip_body}\n      </div>')
+    if grid_items:
+        mixed_body = "\n".join(
+            render_mixed_item(it, now, with_thumb=(i % 2 == 0) and bool(it["image"]))
+            for i, it in enumerate(grid_items)
+        )
+        parts.append(f'      <div class="cg-block cg-mixed2">\n{mixed_body}\n      </div>')
     return "\n".join(parts)
+
+
+def render_group_b(items, now):
+    """World / Tech / Sports / Culture: split hero (headline left, photo
+    right) -> a dense headline list with an occasional small thumbnail
+    (every 3rd row) rather than a photo on every row."""
+    if not items:
+        return ""
+    hero = render_split_hero(items[0], now)
+    rest = items[1:]
+    parts = [hero]
+    if rest:
+        dense_body = "\n".join(
+            render_dense_item(it, now, with_thumb=(i % 3 == 0) and bool(it["image"]))
+            for i, it in enumerate(rest)
+        )
+        parts.append(f'      <div class="cg-block cg-dense">\n{dense_body}\n      </div>')
+    return "\n".join(parts)
+
+
+def render_grid_body(cat, items, now):
+    """Dispatches a category's items to its layout group -- Group A
+    (politics/markets/christian) or Group B (world/tech/sports/culture).
+    Shared by every category tab's grid and by the dedicated Markets /
+    Christian World News homepage sections, so a category's layout looks
+    the same whether you're viewing it as a tab or as its own section."""
+    if not items:
+        return ""
+    return render_group_a(items, now) if cat in GROUP_A_CATEGORIES else render_group_b(items, now)
 
 
 def render_cat_grid(cat, items, now):
@@ -1022,7 +1192,8 @@ def render_cat_grid(cat, items, now):
     nor a story that's already been shown elsewhere on the page."""
     if not items:
         return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}"></div>'
-    return f'<div class="flat-grid cat-grid" data-cat-grid="{cat}">\n{render_grid_body(items, now)}\n      </div>'
+    group = "a" if cat in GROUP_A_CATEGORIES else "b"
+    return f'<div class="flat-grid cat-grid cat-grid--{group}" data-cat-grid="{cat}">\n{render_grid_body(cat, items, now)}\n      </div>'
 
 
 def render_explore_list(items, now):
@@ -1160,10 +1331,10 @@ def main():
     html_text = replace_between(html_text, "<!-- AUTO:LEAD_START -->", "<!-- AUTO:LEAD_END -->", lead_html)
 
     if markets_items:
-        html_text = replace_between(html_text, "<!-- AUTO:MARKETS_START -->", "<!-- AUTO:MARKETS_END -->", render_grid_body(markets_items, now))
+        html_text = replace_between(html_text, "<!-- AUTO:MARKETS_START -->", "<!-- AUTO:MARKETS_END -->", render_grid_body("markets", markets_items, now))
 
     if christian_items:
-        html_text = replace_between(html_text, "<!-- AUTO:CHRISTIAN_START -->", "<!-- AUTO:CHRISTIAN_END -->", render_grid_body(christian_items, now))
+        html_text = replace_between(html_text, "<!-- AUTO:CHRISTIAN_START -->", "<!-- AUTO:CHRISTIAN_END -->", render_grid_body("christian", christian_items, now))
 
     catgrids_html = "\n".join(render_cat_grid(c, cat_items.get(c, []), now) for c in ALL_CATEGORIES)
     html_text = replace_between(html_text, "<!-- AUTO:CATGRIDS_START -->", "<!-- AUTO:CATGRIDS_END -->", catgrids_html)
