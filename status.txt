@@ -1,4 +1,4 @@
-Source status as of 2026-08-24 11:40 UTC:
+Source status as of 2026-08-24 12:38 UTC:
   The Hill / politics: 8 items (ok)
   The Hill / markets: 8 items (ok)
   The Hill / world: 8 items (ok)
@@ -32,7 +32,7 @@ Source status as of 2026-08-24 11:40 UTC:
   Religion News Service / christian: 8 items (ok)
   Faithwire / christian: 8 items (ok)
   MarketWatch / markets: 8 items (ok)
-  Investing.com / markets: 8 items (ok)
+  Investing.com / markets: 0 items (error: The read operation timed out)
   Christianity Today / christian: 0 items (0 entries)
   WSJ / world: 8 items (ok)
   Washington Post / politics: 5 items (ok)
