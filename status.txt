@@ -1,4 +1,4 @@
-Source status as of 2026-08-29 16:33 UTC:
+Source status as of 2026-08-29 19:02 UTC:
   The Hill / politics: 8 items (ok)
   The Hill / markets: 8 items (ok)
   The Hill / world: 8 items (ok)
@@ -36,7 +36,7 @@ Source status as of 2026-08-29 16:33 UTC:
   Christianity Today / christian: 0 items (0 entries)
   WSJ / world: 8 items (ok)
   Washington Post / politics: 8 items (ok)
-  Washington Post / world: 8 items (ok)
+  Washington Post / world: 7 items (ok)
   The Independent / world: 8 items (ok)
   Politico / politics: 0 items (0 entries)
   Yahoo Sports / sports: 8 items (ok)
