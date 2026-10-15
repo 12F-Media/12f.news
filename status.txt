@@ -1,4 +1,4 @@
-Source status as of 2026-10-14 21:16 UTC:
+Source status as of 2026-10-15 03:05 UTC:
   The Hill / politics: 8 items (ok)
   The Hill / markets: 8 items (ok)
   The Hill / world: 8 items (ok)
@@ -29,7 +29,7 @@ Source status as of 2026-10-14 21:16 UTC:
   CBN News / christian: 8 items (ok)
   Christian Post / christian: 8 items (ok)
   WORLD Magazine / christian: 8 items (ok)
-  Religion News Service / christian: 0 items (0 entries)
+  Religion News Service / christian: 8 items (ok)
   Faithwire / christian: 8 items (ok)
   MarketWatch / markets: 8 items (ok)
   Investing.com / markets: 8 items (ok)
